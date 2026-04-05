@@ -8,7 +8,7 @@ import time
 import hashlib
 import asyncio
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from backend.config import get_settings
 from backend.logger import log_event
@@ -63,6 +63,24 @@ def _set_cached_all_chunks(sig: str, all_chunks: list) -> None:
         if len(_ALL_CHUNKS_CACHE) >= _ALL_CHUNKS_CACHE_MAX:
             _ALL_CHUNKS_CACHE.pop(next(iter(_ALL_CHUNKS_CACHE)))
         _ALL_CHUNKS_CACHE[sig] = all_chunks
+
+
+def _chunks_with_ids(chunks: list[dict]) -> list[dict]:
+    """Drop malformed rows; id is required for graph phases and scoring."""
+    return [c for c in chunks if c.get("id") not in (None, "")]
+
+
+def _tokens_for_substring_match(*parts: Iterable[Any]) -> frozenset[str]:
+    """Lowercase strings safe for `tok in chunk['_sl']` (avoids TypeError on int/None tags)."""
+    out: set[str] = set()
+    for part in parts:
+        for t in part:
+            if t is None:
+                continue
+            s = str(t).strip().lower()
+            if s:
+                out.add(s)
+    return frozenset(out)
 
 
 def _get_tag_stoplist() -> frozenset:
@@ -139,7 +157,7 @@ def _score_chunk(chunk: dict, terms: list[str], top_tags: list[str],
 async def search(
     terms: list[str],
     query: str = "",
-    level: str = "Standard",
+    level: str = "Quick",
     kb_dir: str | Path | None = None,
     domains: list[str] | None = None,
     max_results: int = 0,
@@ -159,7 +177,7 @@ async def search(
         domains = _get_domains_from_query(query)
     active_domains = domains or _get_default_domains()
 
-    limits = _LEVELS.get(level, _LEVELS["Standard"])
+    limits = _LEVELS.get(level, _LEVELS["Quick"])
     page = max(1, int(page))
     if max_results == 0:
         max_results = limits["Total"]
@@ -182,13 +200,14 @@ def _search_sync(
     sig = _kb_data_signature(kb_dir)
     cached_all = _get_cached_all_chunks(sig)
     if cached_all is not None:
-        all_chunks = cached_all
+        all_chunks = _chunks_with_ids(cached_all)
     else:
         all_chunks = _load_all_category_chunks(kb_dir)
         if not all_chunks:
             fallback = kb_dir / "detail" / "chunks.jsonl"
             if fallback.exists():
                 all_chunks = _safe_load_jsonl(fallback)
+        all_chunks = _chunks_with_ids(all_chunks)
         _set_cached_all_chunks(sig, all_chunks)
 
     domain_chunks = _filter_domain_chunks(all_chunks, active_domains)
@@ -228,57 +247,57 @@ def _search_sync(
     related_ids = sorted(ref_freq, key=lambda x: -ref_freq[x])[:limits["Phase3"] * 3]
     phase3 = sorted(
         [all_by_id[rid] for rid in related_ids if rid in all_by_id],
-        key=lambda c: -ref_freq.get(c["id"], 0)
+        key=lambda c: -ref_freq.get(c.get("id", ""), 0)
     )[:limits["Phase3"]]
 
     phase4 = phase6 = phase7 = phase8 = []
 
     if quick_search:
-        exclude_ids = {c["id"] for c in phase1 + phase3}
+        exclude_ids = {i for c in phase1 + phase3 if (i := c.get("id")) is not None}
         query_chunks = [c for c in all_chunks
                         if any(t in c.get("tags", []) for t in ("experience", "skills", "technical", "procedures"))]
         phase6 = sorted(
-            [c for c in query_chunks if c["id"] not in exclude_ids
+            [c for c in query_chunks if c.get("id") not in exclude_ids
              and any(t.lower() in c.get("_sl", "") for t in terms)],
             key=lambda c: -sum(1 for t in terms if t.lower() in c.get("_sl", ""))
         )[:limits["Phase6"]]
     else:
         deep_terms = list(dict.fromkeys(top_tags + discovered_keywords))
-        exclude_ids = {c["id"] for c in phase1 + phase3}
+        exclude_ids = {i for c in phase1 + phase3 if (i := c.get("id")) is not None}
         _deep_set = set(deep_terms)
-        terms_lower_set = {t.lower() for t in terms}
+        sl_tokens = _tokens_for_substring_match(terms, deep_terms)
 
         phase4 = sorted(
             [c for c in domain_chunks
-             if c["id"] not in exclude_ids
-             and any(t in c.get("_sl", "") for t in terms_lower_set | _deep_set)],
+             if c.get("id") not in exclude_ids
+             and any(tok in c.get("_sl", "") for tok in sl_tokens)],
             key=lambda c: -sum(1 for t in c.get("tags", []) + c.get("search_keywords", []) if t in _deep_set)
         )[:limits.get("Phase4", 25)]
 
-        exclude_ids |= {c["id"] for c in phase4}
+        exclude_ids |= {i for c in phase4 if (i := c.get("id")) is not None}
         priority_tag_set = {"experience", "skills", "technical", "procedures", "achievements"}
         query_chunks = [c for c in all_chunks if priority_tag_set & set(c.get("tags", []))]
-        all_terms_lower = [t.lower() for t in terms + deep_terms[:5]]
+        all_terms_lower = list(_tokens_for_substring_match(terms, deep_terms[:5]))
         phase6 = sorted(
             [c for c in query_chunks
-             if c["id"] not in exclude_ids
-             and any(t in c.get("_sl", "") for t in all_terms_lower)],
-            key=lambda c: -sum(1 for t in all_terms_lower if t in c.get("_sl", ""))
+             if c.get("id") not in exclude_ids
+             and any(tok in c.get("_sl", "") for tok in all_terms_lower)],
+            key=lambda c: -sum(1 for tok in all_terms_lower if tok in c.get("_sl", ""))
         )[:limits["Phase6"]]
 
         if deep_search:
             long_terms = [t for t in terms if len(t) >= 5]
-            exclude_ids |= {c["id"] for c in phase6}
+            exclude_ids |= {i for c in phase6 if (i := c.get("id")) is not None}
             if long_terms:
                 prefixes = [t[:5] for t in long_terms]
                 phase7 = sorted(
                     [c for c in domain_chunks
-                     if c["id"] not in exclude_ids
+                     if c.get("id") not in exclude_ids
                      and sum(1 for p in prefixes if p in c.get("_sl", "")) >= 2],
                     key=lambda c: -sum(1 for p in prefixes if p in c.get("_sl", ""))
                 )[:limits.get("Phase7", 20)]
 
-            exclude_ids |= {c["id"] for c in phase7}
+            exclude_ids |= {i for c in phase7 if (i := c.get("id")) is not None}
             entity_freq: dict[str, int] = {}
             for c in phase1:
                 for k, v in (c.get("metadata", {}).get("nlp_entities") or {}).items():
@@ -289,7 +308,7 @@ def _search_sync(
             if top_entities:
                 phase8 = []
                 for c in all_chunks:
-                    if c["id"] in exclude_ids:
+                    if c.get("id") in exclude_ids:
                         continue
                     entities = (c.get("metadata") or {}).get("nlp_entities") or {}
                     for key in top_entities:
@@ -301,16 +320,16 @@ def _search_sync(
                 phase8 = phase8[:limits.get("Phase8", 70)]
 
     all_results = phase1 + phase3 + phase4 + phase6 + phase7 + phase8
-    phase1_ids = {c["id"] for c in phase1}
-    phase3_ids = {c["id"] for c in phase3}
-    phase4_ids = {c["id"] for c in phase4}
-    phase6_ids = {c["id"] for c in phase6}
+    phase1_ids = {i for c in phase1 if (i := c.get("id")) is not None}
+    phase3_ids = {i for c in phase3 if (i := c.get("id")) is not None}
+    phase4_ids = {i for c in phase4 if (i := c.get("id")) is not None}
+    phase6_ids = {i for c in phase6 if (i := c.get("id")) is not None}
 
     scored = []
     seen_ids: set[str] = set()
     for chunk in all_results:
-        cid = chunk["id"]
-        if cid in seen_ids:
+        cid = chunk.get("id")
+        if cid is None or cid in seen_ids:
             continue
         seen_ids.add(cid)
         if cid in phase1_ids:
@@ -336,7 +355,7 @@ def _search_sync(
     def _slim(chunk: dict) -> dict:
         return {k: v for k, v in chunk.items() if k not in strip_fields}
 
-    final = sorted(scored, key=lambda c: (-c["RelevanceScore"], c["id"]))[:max_results]
+    final = sorted(scored, key=lambda c: (-c["RelevanceScore"], c.get("id") or ""))[:max_results]
     final = [_slim(c) for c in final]
 
     total_ranked = len(final)

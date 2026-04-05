@@ -95,6 +95,8 @@ class Settings:
         self.MAX_CONTEXT_CHUNK_CHARS = int(os.getenv("MAX_CONTEXT_CHUNK_CHARS", "1200"))
         self.CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", "2048"))
         self.CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.3"))
+        # Quick | Standard | Deep | Exhaustive — Quick reduces per-message CPU vs Standard
+        self.CHAT_SEARCH_LEVEL = os.getenv("CHAT_SEARCH_LEVEL", "Quick")
 
     def _load_dotenv(self):
         """Load .env file from project root if it exists."""

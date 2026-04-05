@@ -36,13 +36,17 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
           });
         }
       } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
         setMessages((prev) => {
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last.role === "assistant" && !last.content) {
+          if (last.role === "assistant") {
+            const base = last.content.trim();
             updated[updated.length - 1] = {
               ...last,
-              content: "Sorry, something went wrong. Please try again.",
+              content: base
+                ? `${last.content}\n\n[Error: ${detail}]`
+                : `Sorry, something went wrong.\n\n${detail}`,
             };
           }
           return updated;

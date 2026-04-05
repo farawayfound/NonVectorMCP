@@ -43,9 +43,10 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
 async def _model_keepalive() -> None:
     """Keep the configured Ollama model warm.
 
-    Sends a keep_alive=-1 preload ping on startup and then every 4 minutes so
-    Ollama never evicts the model from memory.  Uses exponential back-off if
-    Ollama isn't reachable yet (common right after system boot).
+    Every few minutes, ensures only the configured model is loaded (evict others)
+    and preloads it if missing. Skips redundant /api/generate preloads when the
+    model is already in memory. Uses exponential back-off if Ollama isn't
+    reachable yet (common right after system boot).
     """
     from backend.chat.ollama_client import ensure_single_model_loaded
     await asyncio.sleep(5)  # let the app fully start before first ping

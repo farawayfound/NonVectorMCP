@@ -141,6 +141,15 @@ async def unload_model(name: str) -> None:
         logging.warning(f"ollama_client: unload failed for '{name}': {e}")
 
 
+def _ollama_same_base_model(loaded_name: str, want: str) -> bool:
+    """True if Ollama model names refer to the same base (tag-agnostic)."""
+    if not loaded_name or not want:
+        return False
+    a = loaded_name.split(":", 1)[0]
+    b = want.split(":", 1)[0]
+    return a == b
+
+
 async def preload_model(name: str) -> None:
     """Load a model into memory with keep_alive=-1 (never auto-evict)."""
     settings = get_settings()
@@ -159,13 +168,20 @@ async def preload_model(name: str) -> None:
 
 
 async def ensure_single_model_loaded(name: str) -> None:
-    """Enforce one-model-in-memory policy: unload all others, then preload target."""
+    """Enforce one-model-in-memory policy: unload non-target models; preload only if needed."""
+    if not str(name).strip():
+        return
     loaded = await list_loaded_models()
     for m in loaded:
         other = m.get("name", "")
-        if other and other != name:
+        if other and not _ollama_same_base_model(other, name):
             logging.info(f"ollama_client: evicting '{other}' to enforce single-model policy")
             await unload_model(other)
+    loaded = await list_loaded_models()
+    for m in loaded:
+        n = m.get("name", "")
+        if n and _ollama_same_base_model(n, name):
+            return
     await preload_model(name)
 
 

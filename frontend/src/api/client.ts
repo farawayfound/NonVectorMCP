@@ -32,7 +32,17 @@ export async function* streamChat(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error("Chat request failed");
+  if (!res.ok) {
+    const raw = await res.text();
+    let detail = raw.slice(0, 800).trim() || res.statusText;
+    try {
+      const j = JSON.parse(raw) as { detail?: string; error?: string };
+      detail = (j.detail || j.error || detail) as string;
+    } catch {
+      // use raw slice
+    }
+    throw new Error(`Chat request failed (${res.status}): ${detail}`);
+  }
   const reader = res.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();

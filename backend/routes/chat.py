@@ -9,7 +9,7 @@ from fastapi.responses import StreamingResponse
 
 from backend.config import get_settings
 from backend.auth.middleware import get_current_user
-from backend.chat.chat_service import ask, ask_with_history
+from backend.chat.chat_service import ask_stream_events, ask_with_history_stream_events
 from backend.chat.ollama_client import health_check, list_models
 from backend.storage import get_user_index_dir
 from backend.logger import log_event
@@ -82,8 +82,8 @@ async def chat_health():
 async def chat_ask(request: Request):
     """Ask Me Anything — RAG chat against demo/resume content.
 
-    Body: {"query": "...", "model": null, "level": "Standard"}
-    Returns: Server-Sent Events stream of text chunks.
+    Body: {"query": "...", "model": null, "level": null} (level defaults to CHAT_SEARCH_LEVEL, usually Quick)
+    Returns: Server-Sent Events: {"phase":"search"|"generate"}, {"text":"..."}, then [DONE].
     """
     body = await request.json()
     query = body.get("query", "").strip()
@@ -91,23 +91,25 @@ async def chat_ask(request: Request):
         return {"error": "query is required"}
 
     model = body.get("model")
-    level = body.get("level", "Standard")
-
     settings = get_settings()
+    level = body.get("level") or settings.CHAT_SEARCH_LEVEL
+
     kb_dir = settings.INDEXES_DIR / "demo"
 
-    stream = await ask(
-        query=query,
-        kb_dir=kb_dir,
-        mode="ama",
-        model=model,
-        level=level,
-        stream=True,
-    )
-
     async def event_stream():
-        async for chunk in stream:
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield ": stream-open\n\n"
+        async for ev in ask_stream_events(
+            query=query,
+            kb_dir=kb_dir,
+            mode="ama",
+            model=model,
+            level=level,
+        ):
+            yield f"data: {json.dumps(ev)}\n\n"
+            if ev.get("phase") == "search":
+                yield ": kb-search\n\n"
+            elif ev.get("phase") == "generate":
+                yield ": llm-generate\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -118,7 +120,7 @@ async def chat_documents(request: Request):
     """Chat against user's own uploaded and indexed documents.
 
     Requires authentication.
-    Body: {"query": "...", "messages": [...], "model": null, "level": "Standard"}
+    Body: {"query": "...", "messages": [...], "model": null, "level": null}
     """
     user = await get_current_user(request)
     if not user:
@@ -128,7 +130,8 @@ async def chat_documents(request: Request):
     query = body.get("query", "").strip()
     messages = body.get("messages", [])
     model = body.get("model")
-    level = body.get("level", "Standard")
+    settings = get_settings()
+    level = body.get("level") or settings.CHAT_SEARCH_LEVEL
 
     if not query and not messages:
         return {"error": "query or messages required"}
@@ -137,30 +140,33 @@ async def chat_documents(request: Request):
     if not kb_dir.exists():
         return {"error": "No indexed documents found. Upload and index documents first."}
 
-    if messages:
-        # Multi-turn conversation
-        if query:
-            messages.append({"role": "user", "content": query})
-        stream = await ask_with_history(
-            messages=messages,
-            kb_dir=kb_dir,
-            mode="documents",
-            model=model,
-            level=level,
-        )
-    else:
-        stream = await ask(
-            query=query,
-            kb_dir=kb_dir,
-            mode="documents",
-            model=model,
-            level=level,
-            stream=True,
-        )
-
     async def event_stream():
-        async for chunk in stream:
-            yield f"data: {json.dumps({'text': chunk})}\n\n"
+        yield ": stream-open\n\n"
+        if messages:
+            msgs = list(messages)
+            if query:
+                msgs.append({"role": "user", "content": query})
+            ev_iter = ask_with_history_stream_events(
+                messages=msgs,
+                kb_dir=kb_dir,
+                mode="documents",
+                model=model,
+                level=level,
+            )
+        else:
+            ev_iter = ask_stream_events(
+                query=query,
+                kb_dir=kb_dir,
+                mode="documents",
+                model=model,
+                level=level,
+            )
+        async for ev in ev_iter:
+            yield f"data: {json.dumps(ev)}\n\n"
+            if ev.get("phase") == "search":
+                yield ": kb-search\n\n"
+            elif ev.get("phase") == "generate":
+                yield ": llm-generate\n\n"
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -170,15 +176,16 @@ async def chat_documents(request: Request):
 async def chat_search(request: Request):
     """Direct search endpoint — returns ranked chunks without LLM generation.
 
-    Body: {"query": "...", "level": "Standard", "page": 1, "page_size": 20}
+    Body: {"query": "...", "level": "Quick"|..., "page": 1, "page_size": 20}
     """
     user = await get_current_user(request)
     body = await request.json()
+    settings = get_settings()
     query = body.get("query", "").strip()
     if not query:
         return {"error": "query is required"}
 
-    level = body.get("level", "Standard")
+    level = body.get("level") or settings.CHAT_SEARCH_LEVEL
     page = body.get("page", 1)
     page_size = body.get("page_size", 20)
     scope = body.get("scope", "demo")
@@ -191,7 +198,7 @@ async def chat_search(request: Request):
     if scope == "documents" and user:
         kb_dir = get_user_index_dir(user["user_id"])
     else:
-        kb_dir = get_settings().INDEXES_DIR / "demo"
+        kb_dir = settings.INDEXES_DIR / "demo"
 
     results = await search(
         terms=terms,
