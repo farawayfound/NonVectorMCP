@@ -97,6 +97,12 @@ If the remote **already has commits** (for example you initialized from your lap
 
 Commit and push to the same remote and branch the server tracks (typically **`main`**).
 
+### Remote `origin` must exist
+
+**`deploy_chunkylink.sh` always runs `git fetch` / `git pull` from `origin`.** If you only ran **`init_chunkylink_git_on_server.sh`** and never **`link_chunkylink_git_remote.sh`**, there is no `origin` yet—you will see fetch errors until you complete [§ 4 Point `origin` at the remote and push](#4-point-origin-at-the-remote-and-push). The deploy script now stops early with the same hint if `origin` is missing.
+
+If `origin` is set but fetch still fails, check SSH keys / HTTPS credentials on the server and that the URL is correct (`git -C /srv/chunkylink/repo remote -v`).
+
 ### 2. Deploy on the server
 
 SSH in and run:
@@ -168,6 +174,7 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`detected dubious ownership`** or Git fails right after **`git init`** | Ensure **`safe.directory`** is set for `/srv/chunkylink/repo` for **root** (scripts do this) and for your user if you run **`git`** without sudo. |
 | **`fatal: not in a git directory`** after init | Often the same ownership / **`safe.directory`** issue; upgrade scripts and clear a half-done **`.git`** with **`sudo rm -rf /srv/chunkylink/repo/.git`**, then rerun init. Unset stray **`GIT_DIR`** in your environment. |
 | **`Already a git repo — aborting`** | Either deploy with **`deploy_chunkylink.sh`**, or remove **`.git`** only if you intend to re-run init from scratch. |
+| **`'origin' does not appear to be a git repository`** / fetch fails | **`origin` is missing or the URL is wrong.** Run **`link_chunkylink_git_remote.sh`** with your repo URL, or fix **`git remote set-url origin …`**. |
 | **`git pull --ff-only` failed** | Server has local commits or diverged branch; resolve on the server or use **`GIT_REF`** after **`fetch`**, or reset to match policy (be careful in production). |
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |

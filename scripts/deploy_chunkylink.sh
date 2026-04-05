@@ -48,7 +48,18 @@ fi
 
 cd "${REPO}"
 
-echo "==> git fetch"
+if ! command git remote get-url origin &>/dev/null; then
+  echo "ERROR: Git remote 'origin' is not configured."
+  echo "Deploy pulls from origin. Add it once (use your real URL):"
+  echo "  sudo bash ${REPO}/scripts/link_chunkylink_git_remote.sh 'git@github.com:YOUR_USER/YOUR_REPO.git'"
+  echo "Or with HTTPS:"
+  echo "  sudo bash ${REPO}/scripts/link_chunkylink_git_remote.sh 'https://github.com/YOUR_USER/YOUR_REPO.git'"
+  echo "Then push from this server if the remote is still empty:"
+  echo "  sudo git -C ${REPO} push -u origin main"
+  exit 1
+fi
+
+echo "==> git fetch (origin: $(command git remote get-url origin))"
 git fetch --prune origin
 
 if [[ -n "${GIT_REF:-}" ]]; then
