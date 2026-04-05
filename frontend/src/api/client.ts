@@ -1,0 +1,167 @@
+const BASE = "/api";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    credentials: "include",
+    headers: { "Content-Type": "application/json", ...init?.headers },
+    ...init,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(body.detail || body.error || res.statusText);
+  }
+  return res.json();
+}
+
+// Auth
+export const getAuthStatus = () => request<any>("/auth/status");
+export const loginWithInvite = (code: string) =>
+  request<any>("/auth/invite", { method: "POST", body: JSON.stringify({ code }) });
+export const logout = () => request<any>("/auth/logout", { method: "POST" });
+
+// Chat
+export const getChatHealth = () => request<any>("/chat/health");
+
+export async function* streamChat(
+  endpoint: "/chat/ask" | "/chat/documents",
+  body: Record<string, unknown>,
+): AsyncGenerator<string> {
+  const res = await fetch(`${BASE}${endpoint}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("Chat request failed");
+  const reader = res.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.text) yield parsed.text;
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+}
+
+// Search
+export const searchDocuments = (body: Record<string, unknown>) =>
+  request<any>("/chat/search", { method: "POST", body: JSON.stringify(body) });
+
+// Documents
+export const listDocuments = () => request<any>("/documents/");
+export const deleteDocument = (filename: string) =>
+  request<any>(`/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
+export const getDocumentStats = () => request<any>("/documents/stats");
+
+export async function uploadDocument(file: File): Promise<any> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/documents/upload`, {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Upload failed" }));
+    throw new Error(body.detail || "Upload failed");
+  }
+  return res.json();
+}
+
+// Index
+export const buildIndex = () => request<any>("/index/build", { method: "POST" });
+export const getIndexStatus = () => request<any>("/index/status");
+export const getIndexStats = () => request<any>("/index/stats");
+
+// Admin
+export const getAdminStats = () => request<any>("/admin/stats");
+export const getAdminUsers = () => request<any>("/admin/users");
+export const getInviteCodes = () => request<any>("/admin/invite-codes");
+export const createInviteCode = (body: Record<string, unknown>) =>
+  request<any>("/admin/invite-codes", { method: "POST", body: JSON.stringify(body) });
+export const deactivateInviteCode = (code: string) =>
+  request<any>(`/admin/invite-codes/${code}`, { method: "DELETE" });
+export const getAdminActivity = (params?: Record<string, string>) => {
+  const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+  return request<any>(`/admin/activity${qs}`);
+};
+export const getAdminOllama = () => request<any>("/admin/ollama");
+
+// Admin — Ollama management
+export const setOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/model", { method: "PUT", body: JSON.stringify({ name }) });
+export const deleteOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/delete", { method: "POST", body: JSON.stringify({ name }) });
+
+export async function* streamOllamaPull(name: string): AsyncGenerator<any> {
+  const res = await fetch(`${BASE}/admin/ollama/pull`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  if (!res.ok) throw new Error("Pull request failed");
+  const reader = res.body?.getReader();
+  if (!reader) return;
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6).trim();
+        if (data === "[DONE]") return;
+        try {
+          yield JSON.parse(data);
+        } catch {
+          // skip
+        }
+      }
+    }
+  }
+}
+
+// Chat — Suggestions
+export const getChatSuggestions = () => request<{ suggestions: string[] }>("/chat/suggestions");
+
+// Admin — Demo KB
+export const getDemoDocuments = () => request<any>("/admin/demo/documents");
+export const deleteDemoDocument = (filename: string) =>
+  request<any>(`/admin/demo/documents/${encodeURIComponent(filename)}`, { method: "DELETE" });
+export const buildDemoIndex = () =>
+  request<any>("/admin/demo/build", { method: "POST" });
+export const getDemoStatus = () => request<any>("/admin/demo/status");
+
+export async function uploadDemoDocument(file: File): Promise<any> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${BASE}/admin/demo/upload`, {
+    method: "POST",
+    credentials: "include",
+    body: form,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: "Upload failed" }));
+    throw new Error(body.detail || "Upload failed");
+  }
+  return res.json();
+}
