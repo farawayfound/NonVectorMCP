@@ -11,7 +11,11 @@ from fastapi.responses import StreamingResponse
 from backend.auth.middleware import require_admin
 from backend.auth.invite_codes import create_invite
 from backend.database import get_db
-from backend.chat.ollama_client import health_check, list_models, pull_model, delete_model
+from backend.chat.ollama_client import (
+    health_check, list_models, pull_model, delete_model,
+    list_loaded_models, ensure_single_model_loaded,
+    get_model_context_window, get_inference_stats,
+)
 from backend.config import get_settings
 from backend.storage import get_demo_upload_dir, get_demo_index_dir
 from backend.logger import log_event
@@ -170,20 +174,31 @@ async def admin_activity(
 
 @router.get("/ollama")
 async def admin_ollama(request: Request, user: dict = Depends(require_admin)):
-    """Check Ollama status and available models."""
+    """Check Ollama status, available models, memory state, and inference metrics."""
     status = await health_check()
     models = await list_models()
+    loaded = await list_loaded_models()
     settings = get_settings()
+    loaded_names = [m.get("name", "") for m in loaded]
+    context_window = await get_model_context_window(settings.OLLAMA_MODEL)
     return {
         "ollama": status,
         "configured_model": settings.OLLAMA_MODEL,
         "models": models,
+        "loaded_models": loaded,
+        "loaded_names": loaded_names,
+        "context_window": context_window,
+        "inference_stats": get_inference_stats(),
     }
 
 
 @router.put("/ollama/model")
-async def admin_ollama_set_model(request: Request, user: dict = Depends(require_admin)):
-    """Set the active Ollama model for inference."""
+async def admin_ollama_set_model(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+):
+    """Set the active Ollama model for inference and immediately begin preloading it."""
     body = await request.json()
     name = body.get("name", "").strip()
     if not name:
@@ -191,7 +206,8 @@ async def admin_ollama_set_model(request: Request, user: dict = Depends(require_
     settings = get_settings()
     settings.OLLAMA_MODEL = name
     log_event("ollama_model_changed", user_id=user["user_id"], model=name)
-    return {"status": "ok", "model": name}
+    background_tasks.add_task(ensure_single_model_loaded, name)
+    return {"status": "ok", "model": name, "preloading": True}
 
 
 @router.post("/ollama/pull")

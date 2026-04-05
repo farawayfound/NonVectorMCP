@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """ChunkyLink — FastAPI application entry point."""
+import asyncio
+import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -38,6 +40,30 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             raise
 
 
+async def _model_keepalive() -> None:
+    """Keep the configured Ollama model warm.
+
+    Sends a keep_alive=-1 preload ping on startup and then every 4 minutes so
+    Ollama never evicts the model from memory.  Uses exponential back-off if
+    Ollama isn't reachable yet (common right after system boot).
+    """
+    from backend.chat.ollama_client import ensure_single_model_loaded
+    await asyncio.sleep(5)  # let the app fully start before first ping
+    retry_delay = 30
+    while True:
+        try:
+            settings = get_settings()
+            await ensure_single_model_loaded(settings.OLLAMA_MODEL)
+            retry_delay = 30  # reset back-off after a success
+            await asyncio.sleep(240)  # ping every 4 minutes
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.warning("keepalive: ping failed (%s) — retrying in %ss", exc, retry_delay)
+            await asyncio.sleep(retry_delay)
+            retry_delay = min(retry_delay * 2, 240)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
@@ -51,7 +77,14 @@ async def lifespan(app: FastAPI):
         d.mkdir(parents=True, exist_ok=True)
     # Initialize database
     init_db_sync()
+    # Keep the Ollama model warm so first-token latency is always minimal
+    keepalive_task = asyncio.create_task(_model_keepalive())
     yield
+    keepalive_task.cancel()
+    try:
+        await keepalive_task
+    except asyncio.CancelledError:
+        pass
 
 
 def create_app() -> FastAPI:

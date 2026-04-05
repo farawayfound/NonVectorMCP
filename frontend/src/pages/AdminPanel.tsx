@@ -254,17 +254,48 @@ function OllamaTab() {
   const [pullStatus, setPullStatus] = useState("");
   const [pulling, setPulling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Name of the model that was just selected but may not be in memory yet
+  const [loadingModel, setLoadingModel] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const load = useCallback(() => {
-    getAdminOllama().then(setData).catch(() => {});
+  const load = useCallback(async () => {
+    const d = await getAdminOllama().catch(() => null);
+    if (d) setData(d);
+    return d;
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
+  // Stop polling on unmount
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  // Poll /admin/ollama every 2 s after a model change until it appears in loaded_names
+  const startLoadingPoll = (name: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setLoadingModel(name);
+    let attempts = 0;
+    pollRef.current = setInterval(async () => {
+      attempts++;
+      const d = await getAdminOllama().catch(() => null);
+      if (!d) return;
+      setData(d);
+      const isLoaded = (d.loaded_names as string[] || []).includes(name);
+      if (isLoaded || attempts >= 30) {
+        clearInterval(pollRef.current!);
+        pollRef.current = null;
+        setLoadingModel(null);
+      }
+    }, 2000);
+  };
+
   const handleSetModel = async (name: string) => {
+    setError(null);
     try {
       await setOllamaModel(name);
       setData((d: any) => ({ ...d, configured_model: name }));
+      startLoadingPoll(name);
     } catch (err: any) {
       setError(err.message || "Failed to set model");
     }
@@ -310,6 +341,18 @@ function OllamaTab() {
   };
 
   if (!data) return <p>Loading...</p>;
+
+  const configuredModel: string = data.configured_model || "";
+  const loadedNames: string[] = data.loaded_names || [];
+  const stats = data.inference_stats || {};
+  const contextWindow: number | null = data.context_window ?? null;
+  const contextUsed: number = (stats.prompt_tokens || 0) + (stats.completion_tokens || 0);
+  const tokensPerSec: number | null = stats.tokens_per_sec ?? null;
+
+  const contextLabel = contextWindow
+    ? `${contextUsed.toLocaleString()} / ${Math.round(contextWindow / 1000)}k`
+    : contextUsed > 0 ? `${contextUsed.toLocaleString()} tokens` : "—";
+
   return (
     <div>
       {error && (
@@ -322,8 +365,12 @@ function OllamaTab() {
           <div className="stat-label">Ollama Status</div>
         </div>
         <div className="stat-card">
-          <div className="stat-value">{data.models?.length || 0}</div>
-          <div className="stat-label">Available Models</div>
+          <div className="stat-value" style={{ fontSize: contextWindow ? "20px" : "28px" }}>{contextLabel}</div>
+          <div className="stat-label">Context (last response)</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{tokensPerSec != null ? tokensPerSec : "—"}</div>
+          <div className="stat-label">Tokens / sec</div>
         </div>
       </div>
 
@@ -332,7 +379,7 @@ function OllamaTab() {
         <h4 style={{ marginBottom: "0.5rem" }}>Active Model for Inference</h4>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <select
-            value={data.configured_model || ""}
+            value={configuredModel}
             onChange={(e) => handleSetModel(e.target.value)}
             style={{ padding: "8px 12px", background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px", minWidth: "250px" }}
           >
@@ -340,9 +387,13 @@ function OllamaTab() {
               <option key={m.name} value={m.name}>{m.name}</option>
             ))}
           </select>
-          <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-            Currently: <strong>{data.configured_model}</strong>
-          </span>
+          {loadingModel === configuredModel ? (
+            <span style={{ color: "#f59e0b", fontSize: "0.85rem" }}>Loading into memory…</span>
+          ) : loadedNames.includes(configuredModel) ? (
+            <span style={{ color: "var(--success)", fontSize: "0.85rem" }}>Ready</span>
+          ) : (
+            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Not yet loaded</span>
+          )}
         </div>
       </div>
 
@@ -374,28 +425,36 @@ function OllamaTab() {
           <table className="admin-table">
             <thead><tr><th>Model</th><th>Size</th><th>Modified</th><th></th></tr></thead>
             <tbody>
-              {data.models.map((m: any) => (
-                <tr key={m.name}>
-                  <td>
-                    {m.name}
-                    {m.name === data.configured_model && (
-                      <span style={{ marginLeft: "0.5rem", color: "var(--success)", fontSize: "0.75rem" }}>active</span>
-                    )}
-                  </td>
-                  <td>{m.size ? `${(m.size / 1e9).toFixed(1)} GB` : "-"}</td>
-                  <td>{m.modified_at ? new Date(m.modified_at).toLocaleDateString() : "-"}</td>
-                  <td>
-                    <button
-                      className="btn btn-sm btn-danger"
-                      onClick={() => handleDelete(m.name)}
-                      disabled={m.name === data.configured_model}
-                      title={m.name === data.configured_model ? "Cannot remove the active model" : "Remove this model"}
-                    >
-                      Remove
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {data.models.map((m: any) => {
+                const isConfigured = m.name === configuredModel;
+                const isLoaded = loadedNames.includes(m.name);
+                const isCurrentlyLoading = loadingModel === m.name;
+                return (
+                  <tr key={m.name}>
+                    <td>
+                      {m.name}
+                      {isCurrentlyLoading && (
+                        <span style={{ marginLeft: "0.5rem", color: "#f59e0b", fontSize: "0.75rem" }}>loading…</span>
+                      )}
+                      {!isCurrentlyLoading && isLoaded && (
+                        <span style={{ marginLeft: "0.5rem", color: "var(--success)", fontSize: "0.75rem" }}>active</span>
+                      )}
+                    </td>
+                    <td>{m.size ? `${(m.size / 1e9).toFixed(1)} GB` : "-"}</td>
+                    <td>{m.modified_at ? new Date(m.modified_at).toLocaleDateString() : "-"}</td>
+                    <td>
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleDelete(m.name)}
+                        disabled={isConfigured}
+                        title={isConfigured ? "Cannot remove the active model" : "Remove this model"}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </>

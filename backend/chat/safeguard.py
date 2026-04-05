@@ -39,16 +39,27 @@ def get_system_prompt(mode: str = "ama") -> str:
 
 
 def format_context(results: list[dict], max_chunks: int | None = None) -> str:
-    """Format search results into a context block for the LLM prompt."""
+    """Format search results into a context block for the LLM prompt.
+
+    Each chunk is truncated to MAX_CONTEXT_CHUNK_CHARS to keep prompt_eval
+    fast on CPU inference.  Total context is bounded by both max_chunks and
+    per-chunk truncation.
+    """
     if not results:
         return ""
 
+    settings = get_settings()
     if max_chunks is None:
-        max_chunks = get_settings().MAX_CONTEXT_CHUNKS
+        max_chunks = settings.MAX_CONTEXT_CHUNKS
+    max_chars = settings.MAX_CONTEXT_CHUNK_CHARS
 
     parts = []
     for i, chunk in enumerate(results[:max_chunks], 1):
         text = chunk.get("text", "").strip()
+        if len(text) > max_chars:
+            # Truncate on a word boundary when possible
+            cut = text[:max_chars].rfind(" ")
+            text = text[: cut if cut > max_chars // 2 else max_chars] + " …"
         doc_id = chunk.get("metadata", {}).get("doc_id", "unknown")
         score = chunk.get("RelevanceScore", 0)
         parts.append(f"[Source {i} | {doc_id} | score={score}]\n{text}")
