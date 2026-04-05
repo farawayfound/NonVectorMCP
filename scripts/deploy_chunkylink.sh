@@ -48,9 +48,6 @@ fi
 
 cd "${REPO}"
 
-<<<<<<< HEAD
-echo "==> git fetch"
-=======
 if ! command git remote get-url origin &>/dev/null; then
   echo "ERROR: Git remote 'origin' is not configured."
   echo "Deploy pulls from origin. Add it once (use your real URL):"
@@ -63,7 +60,6 @@ if ! command git remote get-url origin &>/dev/null; then
 fi
 
 echo "==> git fetch (origin: $(command git remote get-url origin))"
->>>>>>> 6ada8c29cb338c152473db3c01063c479379d77c
 git fetch --prune origin
 
 if [[ -n "${GIT_REF:-}" ]]; then

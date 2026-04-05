@@ -1,5 +1,1 @@
-<<<<<<< HEAD
 {"root":["./src/App.tsx","./src/main.tsx","./src/api/client.ts","./src/components/AuthGuard.tsx","./src/components/ChatInput.tsx","./src/components/ChatMessage.tsx","./src/components/DocumentCard.tsx","./src/components/Layout.tsx","./src/components/UploadZone.tsx","./src/hooks/useAuth.ts","./src/hooks/useChat.ts","./src/hooks/useDocuments.ts","./src/pages/AdminPanel.tsx","./src/pages/AskMeAnything.tsx","./src/pages/Login.tsx","./src/pages/YourDocuments.tsx","./src/types/index.ts"],"version":"5.8.3"}
-=======
-{"root":["./src/app.tsx","./src/main.tsx","./src/api/client.ts","./src/components/authguard.tsx","./src/components/chatinput.tsx","./src/components/chatmessage.tsx","./src/components/documentcard.tsx","./src/components/layout.tsx","./src/components/uploadzone.tsx","./src/hooks/useauth.ts","./src/hooks/usechat.ts","./src/hooks/usedocuments.ts","./src/pages/adminpanel.tsx","./src/pages/askmeanything.tsx","./src/pages/login.tsx","./src/pages/yourdocuments.tsx","./src/types/index.ts"],"version":"5.8.3"}
->>>>>>> 6ada8c29cb338c152473db3c01063c479379d77c

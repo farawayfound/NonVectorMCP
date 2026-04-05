@@ -1,10 +1,16 @@
 # -*- coding: utf-8 -*-
 """Session-scoped NDJSON debug log (debug mode)."""
 import json
+import os
 import time
 from pathlib import Path
 
-_LOG_FILE = Path(__file__).resolve().parent.parent / "debug-bdbe85.log"
+
+def _debug_log_paths() -> list[Path]:
+    root = Path(__file__).resolve().parent.parent / "debug-bdbe85.log"
+    data_dir = Path(os.getenv("DATA_DIR", "./data")).resolve()
+    alt = data_dir / "logs" / "debug-bdbe85.log"
+    return [root, alt] if alt.resolve() != root.resolve() else [root]
 
 
 def agent_debug_log(
@@ -25,8 +31,14 @@ def agent_debug_log(
             "data": data or {},
             "runId": run_id,
         }
-        with open(_LOG_FILE, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        line = json.dumps(payload, ensure_ascii=False) + "\n"
+        for path in _debug_log_paths():
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "a", encoding="utf-8") as fh:
+                    fh.write(line)
+            except Exception:
+                pass
     except Exception:
         pass
     # endregion

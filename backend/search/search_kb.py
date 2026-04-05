@@ -3,6 +3,7 @@
 import re
 import json
 import logging
+import threading
 import time
 import hashlib
 import asyncio
@@ -31,7 +32,38 @@ _DOMAIN_PATTERNS: list[tuple[str, re.Pattern]] = [
 
 _RESULT_CACHE: dict[str, dict] = {}
 _CACHE_MAX = 50
-_CHUNK_CACHE: dict[str, tuple[list, list]] = {}
+# Full index list keyed only by on-disk KB files (not query-derived domains).
+# Domains vary per query; filtering domain_chunks in memory is cheap vs disk I/O.
+_ALL_CHUNKS_CACHE: dict[str, list] = {}
+_ALL_CHUNKS_CACHE_MAX = 3
+_all_chunks_cache_lock = threading.Lock()
+
+
+def _kb_data_signature(kb_dir: Path) -> str:
+    """Hash KB path + chunk file mtimes/sizes; invalidates when index is rebuilt."""
+    parts: list[str] = [str(kb_dir.resolve())]
+    detail = kb_dir / "detail"
+    if detail.exists():
+        for f in sorted(detail.glob("chunks*.jsonl")):
+            try:
+                st = f.stat()
+                parts.append(f"{f.name}:{st.st_mtime_ns}:{st.st_size}")
+            except OSError:
+                continue
+    raw = "|".join(parts)
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+def _get_cached_all_chunks(sig: str) -> list | None:
+    with _all_chunks_cache_lock:
+        return _ALL_CHUNKS_CACHE.get(sig)
+
+
+def _set_cached_all_chunks(sig: str, all_chunks: list) -> None:
+    with _all_chunks_cache_lock:
+        if len(_ALL_CHUNKS_CACHE) >= _ALL_CHUNKS_CACHE_MAX:
+            _ALL_CHUNKS_CACHE.pop(next(iter(_ALL_CHUNKS_CACHE)))
+        _ALL_CHUNKS_CACHE[sig] = all_chunks
 
 
 def _get_tag_stoplist() -> frozenset:
@@ -148,26 +180,40 @@ def _search_sync(
     quick_search = level == "Quick"
     deep_search = level in ("Deep", "Exhaustive")
 
-    # region agent log
-    _tl0 = time.monotonic()
-    # endregion
-    all_chunks = _load_all_category_chunks(kb_dir)
-    if not all_chunks:
-        # Try unified fallback
-        fallback = kb_dir / "detail" / "chunks.jsonl"
-        if fallback.exists():
-            all_chunks = _safe_load_jsonl(fallback)
-    # region agent log
-    agent_debug_log("H1", "search_kb.py:_search_sync", "chunks_loaded", {
-        "count": len(all_chunks),
-        "load_ms": round((time.monotonic() - _tl0) * 1000),
-        "kb_dir": kb_dir.name,
-        "level": level,
-    })
-    # endregion
+    sig = _kb_data_signature(kb_dir)
+    cached_all = _get_cached_all_chunks(sig)
+    if cached_all is not None:
+        all_chunks = cached_all
+        load_ms = 0
+        cache_hit = True
+    else:
+        # region agent log
+        _tl0 = time.monotonic()
+        # endregion
+        all_chunks = _load_all_category_chunks(kb_dir)
+        if not all_chunks:
+            fallback = kb_dir / "detail" / "chunks.jsonl"
+            if fallback.exists():
+                all_chunks = _safe_load_jsonl(fallback)
+        _set_cached_all_chunks(sig, all_chunks)
+        # region agent log
+        load_ms = round((time.monotonic() - _tl0) * 1000)
+        # endregion
+        cache_hit = False
+
     domain_chunks = _filter_domain_chunks(all_chunks, active_domains)
     if not domain_chunks:
         domain_chunks = all_chunks
+
+    # region agent log
+    agent_debug_log("H1", "search_kb.py:_search_sync", "chunks_loaded", {
+        "count": len(all_chunks),
+        "load_ms": load_ms,
+        "kb_dir": kb_dir.name,
+        "level": level,
+        "cache_hit": cache_hit,
+    })
+    # endregion
     all_by_id = {c["id"]: c for c in all_chunks}
 
     # Phase 1: Initial domain search
