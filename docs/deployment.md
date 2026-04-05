@@ -131,6 +131,12 @@ Merge a specific ref instead of the default pull (example):
 sudo GIT_REF=origin/main bash /srv/chunkylink/repo/scripts/deploy_chunkylink.sh
 ```
 
+**GitHub is truth; discard server-only edits** (uncommitted or extra local commits on the current branch—tracked files only; ignored files like **`.env`** are left alone):
+
+```bash
+sudo DEPLOY_RESET_HARD=1 bash /srv/chunkylink/repo/scripts/deploy_chunkylink.sh
+```
+
 ### 3. Optional: deploy from Windows without an interactive shell on the server
 
 From the project root on Windows (after **`git push`**):
@@ -161,6 +167,7 @@ sudo systemctl restart chunkylink
 | `CHUNKYLINK_VENV` | `/srv/chunkylink/venv` | Python venv (deploy script) |
 | `CHUNKYLINK_OWNER` | `chunkylink` | `chown` target after deploy / init |
 | `DEPLOY_SKIP_NPM` | `0` | Set to **`1`** to skip frontend build (deploy only) |
+| `DEPLOY_RESET_HARD` | `0` | Set to **`1`** to **`git reset --hard origin/<branch>`** after fetch (discards local drift on tracked files) |
 | `GIT_REF` | *(empty)* | If set, deploy runs **`git merge --ff-only $GIT_REF`** instead of **`git pull --ff-only`** |
 
 ## Alternative one-time path: fresh clone
@@ -177,7 +184,7 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`'origin' does not appear to be a git repository`** / fetch fails | **`origin` is missing or the URL is wrong.** Run **`link_chunkylink_git_remote.sh`** with your repo URL, or fix **`git remote set-url origin …`**. |
 | **`Need to specify how to reconcile divergent branches`** | On **`pull`**, add **`--no-rebase`** (merge) or **`--rebase`**, e.g. **`sudo git -C /srv/chunkylink/repo pull origin main --allow-unrelated-histories --no-rebase`**. |
 | **`fatal: not a git repository`** from **`~`** | Run Git with **`sudo git -C /srv/chunkylink/repo …`** (or **`cd`** there first). Your home directory is not the repo. |
-| **`git pull --ff-only` failed** | Server has local commits or diverged branch; resolve on the server or use **`GIT_REF`** after **`fetch`**, or reset to match policy (be careful in production). |
+| **`git pull --ff-only` failed** / “local changes would be overwritten” | Uncommitted edits or diverged history. If **GitHub** should win: **`sudo DEPLOY_RESET_HARD=1 bash …/deploy_chunkylink.sh`** or **`sudo git -C /srv/chunkylink/repo fetch origin && sudo git -C /srv/chunkylink/repo reset --hard origin/main`**. |
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |
 

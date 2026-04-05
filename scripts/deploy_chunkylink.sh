@@ -11,6 +11,8 @@
 #   CHUNKYLINK_VENV=/srv/chunkylink/venv   — Python venv for the service
 #   DEPLOY_SKIP_NPM=1                      — skip frontend build (backend-only change)
 #   GIT_REF=origin/main                    — ref to merge (default: fast-forward current branch)
+#   DEPLOY_RESET_HARD=1                    — after fetch, reset --hard to origin/<current branch>
+#                                            (discards local commits & uncommitted tracked changes; .env safe if gitignored)
 #
 set -euo pipefail
 
@@ -62,13 +64,27 @@ fi
 echo "==> git fetch (origin: $(command git remote get-url origin))"
 git fetch --prune origin
 
-if [[ -n "${GIT_REF:-}" ]]; then
+BR="$(git rev-parse --abbrev-ref HEAD)"
+if [[ "${BR}" == "HEAD" ]]; then
+  echo "ERROR: detached HEAD; checkout a branch (e.g. main) before deploy."
+  exit 1
+fi
+UPSTREAM="origin/${BR}"
+
+if [[ "${DEPLOY_RESET_HARD:-0}" == "1" ]]; then
+  echo "==> DEPLOY_RESET_HARD=1: git reset --hard ${UPSTREAM}"
+  echo "    (tracked files match remote; uncommitted edits and local commits on this branch are discarded)"
+  git reset --hard "${UPSTREAM}"
+elif [[ -n "${GIT_REF:-}" ]]; then
   echo "==> git merge --ff-only ${GIT_REF}"
   git merge --ff-only "${GIT_REF}"
 else
   echo "==> git pull --ff-only"
   git pull --ff-only || {
-    echo "Pull failed (local commits or diverged branch?). Resolve on the server or set GIT_REF=origin/<branch>."
+    echo "Pull failed: uncommitted changes, local commits, or diverged branch."
+    echo "If GitHub is the source of truth, discard server drift and redeploy:"
+    echo "  sudo DEPLOY_RESET_HARD=1 bash ${REPO}/scripts/deploy_chunkylink.sh"
+    echo "Or manually: sudo git -C ${REPO} reset --hard ${UPSTREAM}"
     exit 1
   }
 fi
