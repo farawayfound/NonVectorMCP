@@ -28,6 +28,7 @@ class Settings:
         self.OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
         self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2")
         self.OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "120"))
+        self.OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 
         # ── GitHub OAuth ──
         self.GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
@@ -90,7 +91,8 @@ class Settings:
 
         # ── Chat ──
         self.RELEVANCE_THRESHOLD = float(os.getenv("RELEVANCE_THRESHOLD", "15.0"))
-        self.MAX_CONTEXT_CHUNKS = int(os.getenv("MAX_CONTEXT_CHUNKS", "8"))
+        self.MAX_CONTEXT_CHUNKS = int(os.getenv("MAX_CONTEXT_CHUNKS", "5"))
+        self.MAX_CONTEXT_CHUNK_CHARS = int(os.getenv("MAX_CONTEXT_CHUNK_CHARS", "1200"))
         self.CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", "2048"))
         self.CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.3"))
 

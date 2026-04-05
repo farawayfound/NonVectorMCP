@@ -7,12 +7,23 @@ set -euo pipefail
 
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE 2>/dev/null || true
 
-REPO="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
+REPO_RAW="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
 URL="${1:?Usage: $0 <remote-url>}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   echo "Run as root: sudo bash $0 '$URL'"
   exit 1
+fi
+
+if [[ ! -d "${REPO_RAW}" ]]; then
+  echo "Directory does not exist: ${REPO_RAW}"
+  exit 1
+fi
+
+REPO="$(realpath "${REPO_RAW}")"
+
+if ! command git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${REPO}"; then
+  command git config --global --add safe.directory "${REPO}"
 fi
 
 if [[ ! -d "${REPO}/.git" ]]; then

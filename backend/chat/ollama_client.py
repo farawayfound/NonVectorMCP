@@ -184,9 +184,11 @@ async def generate_stream(
         "model": model,
         "prompt": prompt,
         "stream": True,
+        "keep_alive": -1,
         "options": {
             "temperature": temperature,
             "num_predict": max_tokens,
+            "num_ctx": settings.OLLAMA_NUM_CTX,
         },
     }
     if system:
@@ -244,9 +246,11 @@ async def chat_stream(
         "model": model,
         "messages": messages,
         "stream": True,
+        "keep_alive": -1,
         "options": {
             "temperature": temperature,
             "num_predict": max_tokens,
+            "num_ctx": settings.OLLAMA_NUM_CTX,
         },
     }
 

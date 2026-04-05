@@ -13,7 +13,7 @@ set -euo pipefail
 # Stale GIT_* from the shell breaks `git -C` (Git uses GIT_DIR over -C).
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE 2>/dev/null || true
 
-REPO="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
+REPO_RAW="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
 OWNER="${CHUNKYLINK_OWNER:-chunkylink}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
@@ -21,14 +21,29 @@ if [[ "${EUID:-0}" -ne 0 ]]; then
   exit 1
 fi
 
+if [[ ! -d "${REPO_RAW}" ]]; then
+  echo "Directory does not exist: ${REPO_RAW}"
+  exit 1
+fi
+
+REPO="$(realpath "${REPO_RAW}")"
+
 if [[ -d "${REPO}/.git" ]]; then
   echo "Already a git repo: ${REPO}/.git — aborting."
+  echo "To start over: sudo rm -rf ${REPO}/.git"
   exit 1
 fi
 
 if [[ ! -d "${REPO}/backend" ]]; then
   echo "Expected ChunkyLink app at ${REPO} (missing backend/). Aborting."
   exit 1
+fi
+
+# Git 2.35+: root cannot operate in another user's working tree without this (often reported as
+# "detected dubious ownership" or, in some cases, "not in a git directory").
+if ! command git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${REPO}"; then
+  echo "==> git config --global safe.directory ${REPO}"
+  command git config --global --add safe.directory "${REPO}"
 fi
 
 echo "==> Writing ${REPO}/.gitignore"

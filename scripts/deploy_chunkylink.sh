@@ -16,13 +16,25 @@ set -euo pipefail
 
 unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE 2>/dev/null || true
 
-REPO="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
+REPO_RAW="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
 VENV="${CHUNKYLINK_VENV:-/srv/chunkylink/venv}"
 OWNER="${CHUNKYLINK_OWNER:-chunkylink}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   echo "Run with sudo, e.g.: sudo bash $0"
   exit 1
+fi
+
+if [[ ! -d "${REPO_RAW}" ]]; then
+  echo "Directory does not exist: ${REPO_RAW}"
+  exit 1
+fi
+
+REPO="$(realpath "${REPO_RAW}")"
+
+# Git 2.35+: sudo (root) + repo owned by ${OWNER} requires an explicit safe path.
+if ! command git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${REPO}"; then
+  command git config --global --add safe.directory "${REPO}"
 fi
 
 if [[ ! -d "${REPO}/.git" ]]; then
