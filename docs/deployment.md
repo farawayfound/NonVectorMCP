@@ -89,7 +89,7 @@ sudo git -C /srv/chunkylink/repo push -u origin main
 
 Use an SSH URL if the server has a deploy key or your SSH agent; otherwise use HTTPS and your host’s credential helper or token.
 
-If the remote **already has commits** (for example you initialized from your laptop first), use **`fetch`**, **`pull --allow-unrelated-histories`**, resolve conflicts, commit, then **`push`**. The **`link_chunkylink_git_remote.sh`** script prints those commands as a reminder.
+If the remote **already has commits** (for example you initialized from your laptop first), use **`fetch`**, then **`pull origin main --allow-unrelated-histories --no-rebase`** (Git 2.40+ requires an explicit merge vs rebase choice), resolve conflicts, commit, then **`push`**. If you instead want **only GitHub’s tree** and can discard the server’s unique commits, use **`fetch`** then **`reset --hard origin/main`** (destructive on that clone). The **`link_chunkylink_git_remote.sh`** script prints these commands as a reminder.
 
 ## Day-to-day updates
 
@@ -175,6 +175,8 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`fatal: not in a git directory`** after init | Often the same ownership / **`safe.directory`** issue; upgrade scripts and clear a half-done **`.git`** with **`sudo rm -rf /srv/chunkylink/repo/.git`**, then rerun init. Unset stray **`GIT_DIR`** in your environment. |
 | **`Already a git repo — aborting`** | Either deploy with **`deploy_chunkylink.sh`**, or remove **`.git`** only if you intend to re-run init from scratch. |
 | **`'origin' does not appear to be a git repository`** / fetch fails | **`origin` is missing or the URL is wrong.** Run **`link_chunkylink_git_remote.sh`** with your repo URL, or fix **`git remote set-url origin …`**. |
+| **`Need to specify how to reconcile divergent branches`** | On **`pull`**, add **`--no-rebase`** (merge) or **`--rebase`**, e.g. **`sudo git -C /srv/chunkylink/repo pull origin main --allow-unrelated-histories --no-rebase`**. |
+| **`fatal: not a git repository`** from **`~`** | Run Git with **`sudo git -C /srv/chunkylink/repo …`** (or **`cd`** there first). Your home directory is not the repo. |
 | **`git pull --ff-only` failed** | Server has local commits or diverged branch; resolve on the server or use **`GIT_REF`** after **`fetch`**, or reset to match policy (be careful in production). |
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |

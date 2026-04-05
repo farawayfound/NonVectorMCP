@@ -9,6 +9,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
+from backend.agent_debug_log import agent_debug_log
 from backend.config import get_settings
 from backend.logger import log_event
 
@@ -147,12 +148,23 @@ def _search_sync(
     quick_search = level == "Quick"
     deep_search = level in ("Deep", "Exhaustive")
 
+    # region agent log
+    _tl0 = time.monotonic()
+    # endregion
     all_chunks = _load_all_category_chunks(kb_dir)
     if not all_chunks:
         # Try unified fallback
         fallback = kb_dir / "detail" / "chunks.jsonl"
         if fallback.exists():
             all_chunks = _safe_load_jsonl(fallback)
+    # region agent log
+    agent_debug_log("H1", "search_kb.py:_search_sync", "chunks_loaded", {
+        "count": len(all_chunks),
+        "load_ms": round((time.monotonic() - _tl0) * 1000),
+        "kb_dir": kb_dir.name,
+        "level": level,
+    })
+    # endregion
     domain_chunks = _filter_domain_chunks(all_chunks, active_domains)
     if not domain_chunks:
         domain_chunks = all_chunks

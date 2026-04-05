@@ -2,10 +2,12 @@
 """Async Ollama REST API client with streaming support."""
 import json
 import logging
+import time
 from typing import AsyncIterator
 
 import httpx
 
+from backend.agent_debug_log import agent_debug_log
 from backend.config import get_settings
 
 # ── Last-inference performance snapshot (updated after every generate/chat) ───
@@ -194,6 +196,16 @@ async def generate_stream(
     if system:
         payload["system"] = system
 
+    # region agent log
+    _t_os = time.monotonic()
+    _first_os = True
+    _host = settings.OLLAMA_BASE_URL.split("://", 1)[-1].split("/")[0][:120]
+    agent_debug_log("H3", "ollama_client.py:generate_stream", "stream_start", {
+        "model": model,
+        "ollama_host": _host,
+    })
+    # endregion
+
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
     ) as client:
@@ -203,6 +215,11 @@ async def generate_stream(
             json=payload,
         ) as resp:
             resp.raise_for_status()
+            # region agent log
+            agent_debug_log("H3", "ollama_client.py:generate_stream", "http_stream_ready", {
+                "ms_after_stream_start": round((time.monotonic() - _t_os) * 1000),
+            })
+            # endregion
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -210,6 +227,13 @@ async def generate_stream(
                     chunk = json.loads(line)
                     text = chunk.get("response", "")
                     if text:
+                        # region agent log
+                        if _first_os:
+                            _first_os = False
+                            agent_debug_log("H2", "ollama_client.py:generate_stream", "first_token", {
+                                "ms_since_stream_start": round((time.monotonic() - _t_os) * 1000),
+                            })
+                        # endregion
                         yield text
                     if chunk.get("done", False):
                         _capture_inference_stats(chunk)
@@ -254,6 +278,16 @@ async def chat_stream(
         },
     }
 
+    # region agent log
+    _t_cs = time.monotonic()
+    _first_cs = True
+    _chost = settings.OLLAMA_BASE_URL.split("://", 1)[-1].split("/")[0][:120]
+    agent_debug_log("H3", "ollama_client.py:chat_stream", "stream_start", {
+        "model": model,
+        "ollama_host": _chost,
+    })
+    # endregion
+
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
     ) as client:
@@ -263,6 +297,11 @@ async def chat_stream(
             json=payload,
         ) as resp:
             resp.raise_for_status()
+            # region agent log
+            agent_debug_log("H3", "ollama_client.py:chat_stream", "http_stream_ready", {
+                "ms_after_stream_start": round((time.monotonic() - _t_cs) * 1000),
+            })
+            # endregion
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -270,6 +309,13 @@ async def chat_stream(
                     chunk = json.loads(line)
                     text = chunk.get("message", {}).get("content", "")
                     if text:
+                        # region agent log
+                        if _first_cs:
+                            _first_cs = False
+                            agent_debug_log("H2", "ollama_client.py:chat_stream", "first_token", {
+                                "ms_since_stream_start": round((time.monotonic() - _t_cs) * 1000),
+                            })
+                        # endregion
                         yield text
                     if chunk.get("done", False):
                         _capture_inference_stats(chunk)

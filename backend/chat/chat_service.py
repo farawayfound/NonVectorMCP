@@ -2,9 +2,11 @@
 """RAG pipeline: query -> search -> relevance check -> context -> Ollama -> stream."""
 import logging
 import re
+import time
 from pathlib import Path
 from typing import AsyncIterator
 
+from backend.agent_debug_log import agent_debug_log
 from backend.config import get_settings
 from backend.search.search_kb import search
 from backend.chat.ollama_client import generate_stream, chat_stream
@@ -56,6 +58,11 @@ async def ask(
     terms = _extract_terms(query)
     log_event("chat_ask", query=query, mode=mode, terms=terms)
 
+    # region agent log
+    _t_ask0 = time.monotonic()
+    agent_debug_log("H1", "chat_service.py:ask", "ask_start", {"kb": kb_dir.name})
+    # endregion
+
     # Search
     search_results = await search(
         terms=terms,
@@ -64,6 +71,14 @@ async def ask(
         kb_dir=kb_dir,
         max_results=20,
     )
+
+    # region agent log
+    agent_debug_log("H1", "chat_service.py:ask", "after_search", {
+        "elapsed_ms": round((time.monotonic() - _t_ask0) * 1000),
+        "n_results": len(search_results.get("results", [])),
+        "level": level,
+    })
+    # endregion
 
     # Relevance gate
     should_proceed, refusal = check_relevance(search_results)
@@ -82,6 +97,15 @@ async def ask(
 
     log_event("chat_generate", query=query, context_chunks=len(search_results.get("results", [])),
               top_score=search_results["results"][0].get("RelevanceScore", 0) if search_results.get("results") else 0)
+
+    # region agent log
+    agent_debug_log("H2", "chat_service.py:ask", "before_llm_stream", {
+        "elapsed_since_ask_ms": round((time.monotonic() - _t_ask0) * 1000),
+        "prompt_chars": len(prompt),
+        "system_chars": len(system),
+        "num_ctx": settings.OLLAMA_NUM_CTX,
+    })
+    # endregion
 
     # Generate
     temperature = settings.CHAT_TEMPERATURE
@@ -127,13 +151,26 @@ async def ask_with_history(
 
     terms = _extract_terms(query)
 
+    # region agent log
+    _t_hist0 = time.monotonic()
+    agent_debug_log("H1", "chat_service.py:ask_with_history", "ask_start", {"kb": kb_dir.name})
+    # endregion
+
     search_results = await search(
         terms=terms,
         query=query,
-        level=level,
         kb_dir=kb_dir,
+        level=level,
         max_results=20,
     )
+
+    # region agent log
+    agent_debug_log("H1", "chat_service.py:ask_with_history", "after_search", {
+        "elapsed_ms": round((time.monotonic() - _t_hist0) * 1000),
+        "n_results": len(search_results.get("results", [])),
+        "level": level,
+    })
+    # endregion
 
     should_proceed, refusal = check_relevance(search_results)
     if not should_proceed:
@@ -158,5 +195,13 @@ async def ask_with_history(
             chat_messages.append({"role": msg["role"], "content": msg["content"]})
 
     settings = get_settings()
+    # region agent log
+    _msg_chars = sum(len(m.get("content") or "") for m in chat_messages)
+    agent_debug_log("H2", "chat_service.py:ask_with_history", "before_llm_stream", {
+        "elapsed_since_ask_ms": round((time.monotonic() - _t_hist0) * 1000),
+        "chat_messages_chars": _msg_chars,
+        "num_ctx": settings.OLLAMA_NUM_CTX,
+    })
+    # endregion
     return chat_stream(messages=chat_messages, model=model,
                        temperature=settings.CHAT_TEMPERATURE, max_tokens=settings.CHAT_MAX_TOKENS)
