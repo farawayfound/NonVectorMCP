@@ -1,0 +1,14 @@
+[Unit]
+Description=vpoRAG MCP Server
+After=network.target
+
+[Service]
+User=vporag
+WorkingDirectory=/srv/vpo_rag/mcp_server
+ExecStart=/srv/vpo_rag/venv/bin/python server.py
+Restart=on-failure
+RestartSec=5
+Environment=PYTHON_KEYRING_BACKEND=keyrings.alt.file.PlaintextKeyring
+
+[Install]
+WantedBy=multi-user.target

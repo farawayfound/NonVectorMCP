@@ -1,0 +1,13 @@
+[project]
+name = "chunkylink"
+version = "0.1.0"
+description = "Self-hostable document RAG system with local LLM inference"
+requires-python = ">=3.11"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
