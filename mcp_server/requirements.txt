@@ -1,0 +1,8 @@
+mcp[cli]
+fastapi
+uvicorn
+keyrings.alt
+pyodbc
+keyring
+watchdog>=2.1
+pymysql
