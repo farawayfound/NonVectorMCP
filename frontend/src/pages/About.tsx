@@ -22,14 +22,23 @@ export function About() {
         <section className="about-section">
           <h3>Where it runs</h3>
           <p>
-            This instance is hosted on a small home-lab machine: an <strong>AMD Ryzen 6430U</strong> mini PC with{" "}
-            <strong>32&nbsp;GB DDR4</strong> RAM, running Linux with local LLM inference. That setup keeps data on
-            hardware I control and keeps the demo honest about latency on modest silicon.
+            Please be patient with inference latency, as this instance is entirely hosted on a mini-PC
+            at my home office: an <strong>AMD Ryzen 7430U</strong> mini PC with{" "} <strong>32&nbsp;GB DDR4</strong> RAM, 
+            running Linux with <strong>local LLM</strong>(Ollama) inference. This setup is designed
+            to be highly available, low-maintenance, and cost-effective.
           </p>
         </section>
 
         <section className="about-section">
           <h3>Architecture (high level)</h3>
+          <p>
+            The architecture is designed to be easily deployable without requiring a lot of infrastructure or LLM API access.
+            It is based on a system I designed and deployed for internal usage at Spectrum (Charter Communications) in technical debt maintenance.
+          </p>
+          <p>
+            The system works by through local processing for indexing, searching, reteival, and database tasks: 
+            bypassing the need for a dedicated API LLM Endpoint and minimizing token utilization. AI agents invoke and interact with the system via the MCP server.
+          </p>
           <ul className="about-list">
             <li>
               <strong>Client</strong> — React and TypeScript (Vite); chat consumes server-sent events for streamed
@@ -50,7 +59,7 @@ export function About() {
             </li>
             <li>
               <strong>RAG pipeline</strong> — Query handling → retrieval from the KB → <strong>relevance gating</strong>{" "}
-              (low-similarity context is refused so the model is less tempted to hallucinate) → prompt assembly →
+              (symetrical cross-referencing, deduplication, and ranking) → prompt assembly →
               streamed answer.
             </li>
             <li>
@@ -80,7 +89,7 @@ export function About() {
         </section>
 
         <p className="muted about-footnote">
-          First-token latency on this hardware is on the order of many seconds—fine for a personal demo, and a useful
+          First-token latency on this hardware is on the order of many seconds—this is a demo project, and a useful
           reminder that local RAG is as much an ops and sizing problem as a modeling one.
         </p>
       </div>
