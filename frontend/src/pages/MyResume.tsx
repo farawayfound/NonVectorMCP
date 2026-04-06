@@ -50,13 +50,15 @@ const EXPERIENCE: ExperienceItem[] = [
     dates: "July 2022 – July 2025",
     context: "Product Support Tier 3: developed internal projects and tools, fixed severe escalations.",
     summary:
-      "Owned full SDLC for C#.NET healthcare systems, delivered hybrid Java/Python automation that saved 500+ labor hours annually, and kept a critical platform highly available with Kubernetes, Kafka, and rigorous incident response.",
+      "Owned full SDLC for a mission-critical C#.NET healthcare stack; automated compliance and operations (ServiceNow, PowerShell/Python, T-SQL) saving 500+ labor hours yearly; delivered 30+ billable customer engagements; and held 99.9% uptime with Kubernetes, Kafka, and disciplined postmortems.",
     bullets: [
-      "Owned the full SDLC for C#.NET monoliths, driving change management in ServiceNow and source control in Azure DevOps.",
-      "Engineered a hybrid automation solution utilizing Java to interface with ServiceNow APIs and Python to execute complex compliance reporting logic, saving over 500 annual labor hours.",
-      "Ensured 99.9% uptime for a healthcare platform by managing Kubernetes clusters, load balancing nodes, and resetting Kafka pods during major incidents.",
-      "Architected HIPAA-compliant database environments locally and in Azure Data Warehouse, performing large-scale data migrations and merges.",
-      "Resolved over 600 high-priority service requests, triaging defects and leading postmortem analysis to prevent recurring outages and production incidents.",
+      "Drove end-to-end SDLC for C#.NET monolith enhancements and critical fixes—requirements through production—with ServiceNow change management and Azure DevOps delivery.",
+      "Strengthened reliability using Splunk and Azure Data Warehouse to trace .NET and SQL exceptions, eliminate root causes, and avoid regressions on complex dependencies.",
+      "Sustained 99.9% uptime via Kubernetes and Kafka operations during major incidents, plus documented postmortems and preventive hardening.",
+      "Built HIPAA-compliant database patterns and executed large-scale migrations and merges in Azure Data Warehouse with query and distribution tuning for cost and performance.",
+      "Saved 500+ annual labor hours automating compliance reporting through ServiceNow APIs combined with PowerShell, Python, and advanced T-SQL.",
+      "Led 30+ billable customer projects from stakeholder scoping through go-live and post-deployment support, keeping timelines and quality aligned.",
+      "Closed 600+ high-priority service requests while capturing repeatable fixes and documentation that scaled junior engineers and cut repeat escalations.",
     ],
   },
   {
@@ -65,11 +67,13 @@ const EXPERIENCE: ExperienceItem[] = [
     dates: "June 2021 – July 2022",
     context: "Technical Debt Management: triaged and resolved bugs, errors, and enhancement requests.",
     summary:
-      "Delivered cross-functional fixes across APIs, Azure, and third-party integrations; shipped a localization framework for international users; and closed 300+ tickets with very high acceptance.",
+      "Stabilized a .NET platform through 300+ high-quality tickets annually, GDPR-aware SQL operations, cross-stack diagnostics, internal enablement for Tier 1/CSM, and a localization launch for 400k+ international users.",
     bullets: [
-      "Facilitated cross-functional collaboration in an Agile environment to diagnose and resolve integration issues across API endpoints, Azure infrastructure, and third-party services.",
-      "Designed a localization framework enabling 3 new languages for 400k+ international users.",
-      "Resolved 300+ Tier 2 and Tier 4 Jira tickets, including data fixes, stored procedure optimization, and code changes with a 98% acceptance rate.",
+      "Resolved 300+ Tier 2 and Tier 4 Jira tickets annually—including data fixes, stored procedure tuning, and code changes—with a 98% acceptance rate via Visual Studio and Azure DevOps sprints.",
+      "Protected customer trust with precision SQL remediation, controlled sensitive deletions, and validation aligned to GDPR expectations.",
+      "Diagnosed complex defects across APIs, Azure services, and third-party integrations using browser tooling, Postman, SendGrid, and Azure observability with SME collaboration.",
+      "Published reusable templates, scripts, and knowledge articles so Tier 1 and Customer Success closed recurring issues without engineering escalations.",
+      "Shipped a localization framework that introduced three new languages for 400,000+ international users.",
     ],
   },
   {
@@ -77,27 +81,43 @@ const EXPERIENCE: ExperienceItem[] = [
     company: "US Air Force",
     dates: "May 2017 – April 2021",
     context:
-      "Civil Engineering Squadron: maintained Nellis Air Force Base properties with multidisciplinary skills.",
+      "Civil Engineering Squadron: maintained Nellis Air Force Base real property across structural trades.",
     summary:
-      "Led crews maintaining base infrastructure, prioritized mission-critical work, mentored junior airmen, and represented the service on the USAF Honor Guard.",
+      "Rotated through sheet metal, welding, carpentry, masonry, locksmithing, roofing, flooring, and finish work; led crews; mentored junior airmen; supported standby and ceremonial duties; and delivered visible squadron legacy projects.",
     bullets: [
-      "Managed independent crews of structural apprentices, optimizing workflow and resource allocation to maintain real property on Nellis Air Force Base.",
-      "Prioritized mission-critical work according to impact and resource availability.",
-      "Mentored junior airmen on technical competency and professional development.",
-      "Selected for the USAF Honor Guard, leading over 35 high-stakes ceremonial events.",
+      "Led independent crews of three, optimizing workflows, delegating by proficiency, and prioritizing mission-critical work orders against resource limits.",
+      "Rotated quarterly across trades to sustain versatility maintaining base infrastructure in extreme operational conditions.",
+      "Stood one-week alert rotations every eight weeks—reachable within an hour—to support emergency response for breached perimeters and facility crises.",
+      "Mentored junior airmen on technical skills and professional growth away from home station.",
+      "USAF Honor Guard and Color Guard: executed 35+ high-stakes events, including 27 funeral ceremonies with firing party and pallbearer duties and eight major Las Vegas processions.",
+      "Designed and led a 15-foot mural at Lackland basic training lecture halls and created the 99th Civil Engineering Squadron commemorative coin.",
     ],
   },
   {
-    title: "Co-Founder, Chief Engineer",
-    company: "Krate Technologies LLC",
-    dates: "Jan. 2014 – Oct. 2016",
-    context:
-      "Founded start-up 3D printing, CAD, and fabrication firm aimed to fill a local need for rapid prototyping",
+    title: "Wedding Photographer",
+    company: "Agaba Studios",
+    dates: "February 2016 – February 2017",
+    context: "Houston, TX — wedding and portrait photography with direct client ownership.",
     summary:
-      "Co-founded a rapid-prototyping startup: shaped roadmap, ran projects end-to-end, and served as the hands-on technical lead across CAD, printing, and fabrication.",
+      "Partnered with couples on full wedding-day coverage, directed large groups on-site, and balanced studio assignments with independent creative work.",
     bullets: [
-      "Formulate business roadmap, manage projects from defining requirements to review.",
-      "Technical expert, learning on the job daily and adapting to different problems.",
+      "Delivered 12 weddings and 15 engagement sessions with structured planning, timeline control, and consistent client communication.",
+      "Directed large groups across venues to capture essential moments efficiently while maintaining a calm, service-oriented presence.",
+      "Produced independent landscape, portrait, and senior photography projects alongside studio commitments.",
+    ],
+  },
+  {
+    title: "Co-Founder, Chief Technology Officer",
+    company: "Krate Technologies LLC",
+    dates: "December 2013 – October 2016",
+    context:
+      "Agile 3D printing, CAD, and fabrication studio serving B2B/B2C clients with rapid prototypes and embedded (Arduino) solutions.",
+    summary:
+      "Co-founded a rapid-prototyping startup: owned roadmap and delivery, mentored a tiny technical team, and shipped high-touch hardware projects from Maker’s Cafe operations.",
+    bullets: [
+      "Defined the roadmap and ran projects from requirements through client review with short feedback loops and integrated operations.",
+      "Delivered notable builds including architectural models for Matt Fajkus Architecture, research-oriented 3D scanning for UT/Blanton Museum collaborators, and complex wearable/mechanical prototypes.",
+      "Operated as hands-on CTO across CAD, FDM printing, and Arduino-backed embedded work, adapting quickly to novel fabrication challenges.",
     ],
   },
 ];
