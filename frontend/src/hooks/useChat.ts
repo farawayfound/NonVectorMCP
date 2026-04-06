@@ -4,6 +4,9 @@ import type { ChatMessage } from "../types";
 
 export type ChatPhase = "idle" | "sending" | "searching" | "thinking" | "answering";
 
+/** Minimum milliseconds each phase stays visible before transitioning. */
+const MIN_PHASE_MS = 600;
+
 export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -20,6 +23,17 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
       const assistantMsg: ChatMessage = { role: "assistant", content: "", thinking: "" };
       setMessages((prev) => [...prev, assistantMsg]);
 
+      // Track phase timing so each phase is visible for at least MIN_PHASE_MS
+      let lastPhaseTime = Date.now();
+      const transitionPhase = async (next: ChatPhase) => {
+        const elapsed = Date.now() - lastPhaseTime;
+        if (elapsed < MIN_PHASE_MS) {
+          await new Promise((r) => setTimeout(r, MIN_PHASE_MS - elapsed));
+        }
+        setPhase(next);
+        lastPhaseTime = Date.now();
+      };
+
       try {
         const body: Record<string, unknown> = { query, ...extra };
         if (endpoint === "/chat/documents") {
@@ -29,11 +43,17 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
           }));
         }
 
+        let answering = false;
         for await (const event of streamChat(endpoint, body)) {
           if (event.phase) {
-            if (event.phase === "search") setPhase("searching");
-            else if (event.phase === "generate") setPhase("thinking");
-            else if (event.phase === "answering") setPhase("answering");
+            if (event.phase === "search") {
+              await transitionPhase("searching");
+            } else if (event.phase === "generate") {
+              await transitionPhase("thinking");
+            } else if (event.phase === "answering") {
+              await transitionPhase("answering");
+              answering = true;
+            }
           }
           if (event.thinking) {
             setMessages((prev) => {
@@ -49,7 +69,10 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
             });
           }
           if (event.text) {
-            setPhase("answering");
+            if (!answering) {
+              await transitionPhase("answering");
+              answering = true;
+            }
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
