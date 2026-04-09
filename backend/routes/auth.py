@@ -138,8 +138,8 @@ async def request_access(request: Request):
                 status_code=429,
             )
 
-        # Create a single-use invite code that expires in 7 days
-        expires = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+        # Create a single-use invite code that expires in 48 hours
+        expires = (datetime.now(timezone.utc) + timedelta(hours=48)).isoformat()
         code = await create_invite(
             db, created_by="system:request-access", label=f"Requested by {email}",
             max_uses=1, expires_at=expires,

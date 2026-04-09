@@ -80,10 +80,46 @@ function OverviewTab() {
   );
 }
 
+const EXPIRY_OPTIONS = [
+  { label: "No expiration", value: "" },
+  { label: "1 hour", value: "1h" },
+  { label: "6 hours", value: "6h" },
+  { label: "12 hours", value: "12h" },
+  { label: "24 hours", value: "24h" },
+  { label: "48 hours", value: "48h" },
+  { label: "7 days", value: "7d" },
+  { label: "30 days", value: "30d" },
+] as const;
+
+function expiryToISO(value: string): string | null {
+  if (!value) return null;
+  const now = new Date();
+  const match = value.match(/^(\d+)(h|d)$/);
+  if (!match) return null;
+  const amount = parseInt(match[1], 10);
+  const unit = match[2];
+  if (unit === "h") now.setTime(now.getTime() + amount * 3600_000);
+  else now.setTime(now.getTime() + amount * 86400_000);
+  return now.toISOString();
+}
+
+function formatExpiry(expiresAt: string | null): string {
+  if (!expiresAt) return "Never";
+  const d = new Date(expiresAt);
+  const now = new Date();
+  if (d <= now) return "Expired";
+  const diffMs = d.getTime() - now.getTime();
+  const diffH = Math.floor(diffMs / 3600_000);
+  if (diffH < 1) return `${Math.ceil(diffMs / 60_000)}m left`;
+  if (diffH < 48) return `${diffH}h left`;
+  return `${Math.floor(diffH / 24)}d left`;
+}
+
 function CodesTab() {
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [label, setLabel] = useState("");
   const [maxUses, setMaxUses] = useState(0);
+  const [expiry, setExpiry] = useState("48h");
 
   const load = useCallback(() => {
     getInviteCodes().then((d) => setCodes(d.codes)).catch(() => {});
@@ -92,15 +128,35 @@ function CodesTab() {
   useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
-    await createInviteCode({ label, max_uses: maxUses });
+    await createInviteCode({
+      label,
+      max_uses: maxUses,
+      expires_at: expiryToISO(expiry),
+    });
     setLabel("");
     setMaxUses(0);
+    setExpiry("48h");
     load();
   };
 
   const handleDeactivate = async (code: string) => {
     await deactivateInviteCode(code);
     load();
+  };
+
+  const isExpired = (c: InviteCode) =>
+    c.expires_at ? new Date(c.expires_at) <= new Date() : false;
+
+  const statusLabel = (c: InviteCode) => {
+    if (!c.active) return "Inactive";
+    if (isExpired(c)) return "Expired";
+    return "Active";
+  };
+
+  const statusColor = (c: InviteCode) => {
+    if (!c.active) return "var(--text-muted)";
+    if (isExpired(c)) return "var(--danger, #ef4444)";
+    return "var(--success, #22c55e)";
   };
 
   return (
@@ -124,22 +180,45 @@ function CodesTab() {
             title="Maximum number of times this invite code can be redeemed by different users. Set to 0 for unlimited."
           />
         </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          <label style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+            Expires after
+          </label>
+          <select
+            value={expiry}
+            onChange={(e) => setExpiry(e.target.value)}
+            style={{
+              padding: "6px 10px",
+              background: "var(--bg-card)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+            }}
+          >
+            {EXPIRY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
         <button className="btn btn-primary" onClick={handleCreate}>Create Code</button>
       </div>
       <table className="admin-table">
         <thead>
-          <tr><th>Code</th><th>Label</th><th>Redemptions</th><th>Created</th><th>Status</th><th></th></tr>
+          <tr><th>Code</th><th>Label</th><th>Redemptions</th><th>Created</th><th>Expires</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           {codes.map((c) => (
-            <tr key={c.code}>
+            <tr key={c.code} style={{ opacity: (!c.active || isExpired(c)) ? 0.55 : 1 }}>
               <td className="monospace">{c.code}</td>
               <td>{c.label || "-"}</td>
               <td>{c.use_count}{c.max_uses > 0 ? `/${c.max_uses}` : ""}</td>
               <td>{new Date(c.created_at).toLocaleDateString()}</td>
-              <td>{c.active ? "Active" : "Inactive"}</td>
+              <td title={c.expires_at ? new Date(c.expires_at).toLocaleString() : "No expiration"}>
+                {formatExpiry(c.expires_at)}
+              </td>
+              <td style={{ color: statusColor(c) }}>{statusLabel(c)}</td>
               <td>
-                {c.active ? (
+                {c.active && !isExpired(c) ? (
                   <button className="btn btn-sm btn-danger" onClick={() => handleDeactivate(c.code)}>
                     Deactivate
                   </button>

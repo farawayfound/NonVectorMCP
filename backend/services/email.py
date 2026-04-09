@@ -25,7 +25,7 @@ async def send_invite_email(to_email: str, invite_code: str) -> bool:
         f"Here is your access code for ChunkyPotato:\n\n"
         f"    {invite_code}\n\n"
         f"Enter this code on the login page to get started.\n\n"
-        f"This code is single-use and expires in 7 days.\n\n"
+        f"This code is single-use and expires in 48 hours.\n\n"
         f"— ChunkyPotato"
     )
     msg.add_alternative(
@@ -37,7 +37,7 @@ async def send_invite_email(to_email: str, invite_code: str) -> bool:
                 <code style="font-size: 28px; letter-spacing: 4px; color: #e4e6ed; font-family: 'JetBrains Mono', monospace;">{invite_code}</code>
             </div>
             <p style="color: #8b8fa3;">Enter this code on the login page to get started.</p>
-            <p style="color: #8b8fa3; font-size: 13px;">This code is single-use and expires in 7 days.</p>
+            <p style="color: #8b8fa3; font-size: 13px;">This code is single-use and expires in 48 hours.</p>
         </div>
         </body></html>""",
         subtype="html",
