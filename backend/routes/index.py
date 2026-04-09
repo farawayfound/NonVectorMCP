@@ -18,11 +18,12 @@ _active_jobs: dict[str, dict] = {}
 
 
 def _run_index(user_id: str, src_dir: str, out_dir: str, config_overrides: dict | None = None):
-    """Run indexing in background thread."""
+    """Run indexing in background thread — always a clean rebuild for user indexes."""
     try:
         _active_jobs[user_id] = {"status": "running", "error": None}
         from backend.indexers.build_index import main as build_main
-        build_main(src_dir=src_dir, out_dir=out_dir, config_overrides=config_overrides)
+        build_main(src_dir=src_dir, out_dir=out_dir, config_overrides=config_overrides,
+                   full_rebuild=True)
         _active_jobs[user_id] = {"status": "complete", "error": None}
         log_event("index_complete", user_id=user_id)
     except Exception as e:

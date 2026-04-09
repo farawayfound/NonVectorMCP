@@ -105,13 +105,25 @@ def write_chunks_by_category(all_chunks: List[Dict], detail_dir: Path):
         raise
 
 
-def main(src_dir: str = None, out_dir: str = None, config_overrides: dict = None):
+def _clean_index_output(out_path: Path):
+    """Remove all generated index artifacts for a full rebuild."""
+    for sub in ("detail", "router", "state"):
+        d = out_path / sub
+        if d.exists():
+            for f in d.iterdir():
+                if f.is_file():
+                    f.unlink()
+
+
+def main(src_dir: str = None, out_dir: str = None, config_overrides: dict = None,
+         full_rebuild: bool = False):
     """Run the indexing pipeline.
 
     Args:
         src_dir: Source documents directory. Defaults to settings.UPLOADS_DIR / "demo".
         out_dir: Output index directory. Defaults to settings.INDEXES_DIR / "demo".
         config_overrides: Optional dict of settings to override (e.g. per-user chunking config).
+        full_rebuild: If True, wipe existing index data and rebuild from scratch.
     """
     settings = get_settings()
     if src_dir is None:
@@ -120,6 +132,9 @@ def main(src_dir: str = None, out_dir: str = None, config_overrides: dict = None
         out_dir = str(settings.INDEXES_DIR / "demo")
 
     out_path = Path(out_dir)
+    if full_rebuild:
+        _clean_index_output(out_path)
+
     for p in [out_path / "detail", out_path / "router", out_path / "logs",
               out_path / "manifests", out_path / "state"]:
         p.mkdir(parents=True, exist_ok=True)
