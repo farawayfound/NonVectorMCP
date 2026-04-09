@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""CSV processing for ChunkyLink document indexing."""
+"""CSV processing for ChunkyPotato document indexing."""
 import csv
 import re
 import hashlib

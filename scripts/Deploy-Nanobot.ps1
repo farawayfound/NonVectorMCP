@@ -6,9 +6,10 @@
 #   .\scripts\Deploy-Nanobot.ps1 -Target "david@nanobot.local"
 
 param(
-    [string] $Target = "david@nanobot.local"
+    [string] $Target = "david@nanobot"
 )
 
 $remote = "sudo bash /srv/chunkylink/repo/scripts/deploy_chunkylink.sh"
 Write-Host "SSH $Target -> $remote"
-ssh $Target $remote
+# accept-new: first connect adds host key without interactive prompt
+ssh -o StrictHostKeyChecking=accept-new $Target $remote

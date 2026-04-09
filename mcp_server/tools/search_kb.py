@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """search_kb tool — Python port of Search-DomainAware.ps1."""
-import re, json, logging, time, hashlib
+import re, json, logging, time, hashlib, copy, threading
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any
 import asyncio, sys
@@ -48,14 +49,17 @@ _LEVEL_MAX_PAGES: dict[str, int] = {
 
 # Result cache for pagination — keyed by (terms, query, level, domains) fingerprint.
 # Stores the full ranked list so all pages come from the same search run.
-# LRU-style: capped at _CACHE_MAX entries; oldest entry evicted when full.
-_RESULT_CACHE: dict[str, list] = {}
+# LRU + optional TTL (config.SEARCH_RESULT_CACHE_TTL_SEC).
+_RESULT_CACHE: OrderedDict[str, tuple[float, dict]] = OrderedDict()
 _CACHE_MAX = 50  # max concurrent cached searches (one per active triage session)
+_result_cache_lock = threading.Lock()
+_RESULT_CACHE_TTL_SEC = float(getattr(config, "SEARCH_RESULT_CACHE_TTL_SEC", 300.0))
 
 # Module-level chunk cache — keyed by frozenset of (path, mtime, size) tuples.
 # Invalidated automatically when any category file changes (e.g. after a rebuild).
-_CHUNK_CACHE: dict[str, tuple[list, list]] = {}  # key -> (domain_chunks, all_chunks)
+_CHUNK_CACHE: OrderedDict[str, tuple[list, list]] = OrderedDict()
 _CHUNK_CACHE_MAX = 3
+_chunk_cache_lock = threading.Lock()
 
 
 def _chunk_cache_key(kb_dir: Path, domains: list[str]) -> str:
@@ -72,15 +76,21 @@ def _chunk_cache_key(kb_dir: Path, domains: list[str]) -> str:
 
 def _get_cached_chunks(kb_dir: Path, domains: list[str]) -> tuple[list, list] | None:
     key = _chunk_cache_key(kb_dir, domains)
-    return _CHUNK_CACHE.get(key)
+    with _chunk_cache_lock:
+        if key not in _CHUNK_CACHE:
+            return None
+        _CHUNK_CACHE.move_to_end(key)
+        return _CHUNK_CACHE[key]
 
 
 def _set_cached_chunks(kb_dir: Path, domains: list[str],
                        domain_chunks: list, all_chunks: list) -> None:
     key = _chunk_cache_key(kb_dir, domains)
-    if len(_CHUNK_CACHE) >= _CHUNK_CACHE_MAX:
-        _CHUNK_CACHE.pop(next(iter(_CHUNK_CACHE)))
-    _CHUNK_CACHE[key] = (domain_chunks, all_chunks)
+    with _chunk_cache_lock:
+        _CHUNK_CACHE[key] = (domain_chunks, all_chunks)
+        _CHUNK_CACHE.move_to_end(key)
+        while len(_CHUNK_CACHE) > _CHUNK_CACHE_MAX:
+            _CHUNK_CACHE.popitem(last=False)
 
 
 def _cache_key(terms: list[str], query: str, level: str, domains: list[str]) -> str:
@@ -225,8 +235,16 @@ async def _run(
 
     # ── Cache lookup: pages 2+ reuse the ranked list from page 1 ────────────
     ckey = _cache_key(terms, query, level, list(domains))
-    if page > 1 and ckey in _RESULT_CACHE:
-        cached = _RESULT_CACHE[ckey]
+    cached = None
+    with _result_cache_lock:
+        if page > 1 and ckey in _RESULT_CACHE:
+            ts, payload = _RESULT_CACHE[ckey]
+            if _RESULT_CACHE_TTL_SEC <= 0 or (time.monotonic() - ts) <= _RESULT_CACHE_TTL_SEC:
+                _RESULT_CACHE.move_to_end(ckey)
+                cached = copy.deepcopy(payload)
+            else:
+                _RESULT_CACHE.pop(ckey, None)
+    if cached is not None and page > 1:
         total_ranked = len(cached["final"])
         total_pages  = max(1, -(-total_ranked // page_size))
         max_pages    = _LEVEL_MAX_PAGES.get(level, 1)
@@ -537,13 +555,18 @@ def _search_sync(
     final = [_slim(c) for c in guaranteed + remaining]
 
     # ── Cache store: save full ranked list for subsequent page calls ─────────
-    if len(_RESULT_CACHE) >= _CACHE_MAX:
-        _RESULT_CACHE.pop(next(iter(_RESULT_CACHE)))  # evict oldest
-    _RESULT_CACHE[ckey] = {
+    payload = {
         "final":      final,
         "top_tags":   top_tags[:5],
         "discovered": discovered_keywords[:10],
     }
+    with _result_cache_lock:
+        if ckey in _RESULT_CACHE:
+            _RESULT_CACHE.pop(ckey, None)
+        _RESULT_CACHE[ckey] = (time.monotonic(), payload)
+        _RESULT_CACHE.move_to_end(ckey)
+        while len(_RESULT_CACHE) > _CACHE_MAX:
+            _RESULT_CACHE.popitem(last=False)
 
     # ── Pagination ────────────────────────────────────────────────────────────
     # Slice the fully-ranked list into fixed-size pages.
@@ -570,7 +593,8 @@ def _search_sync(
               terms=terms, query=query, level=level, domains=active_domains,
               chunks_returned=len(page_results), phase_counts=phase_counts,
               top_tags=top_tags[:5], duration_ms=duration_ms,
-              page=page, total_pages=total_pages)
+              page=page, total_pages=total_pages,
+              result_cache_hit=False)
 
     result = {
         "results":      page_results,

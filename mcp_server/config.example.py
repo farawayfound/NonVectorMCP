@@ -20,6 +20,9 @@ POSTRCA_CSV_DIR   = "/srv/samba/share/postrcaCSV"
 CSV_WATCHER_LOG   = "/srv/samba/share/csv_watcher.log"
 PYTHON_BIN        = "/srv/vpo_rag/venv/bin/python"
 
+# Search result cache TTL (seconds); 0 = LRU only
+SEARCH_RESULT_CACHE_TTL_SEC = float(os.environ.get("SEARCH_RESULT_CACHE_TTL_SEC", "300"))
+
 # Per-user bearer tokens for identity logging.
 # Tokens matching the pattern "vporag-P<7digits>" are auto-registered on first use
 # and persisted to auth_tokens.json (sidecar file, gitignored) — no admin action needed.

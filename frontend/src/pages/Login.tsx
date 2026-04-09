@@ -30,7 +30,7 @@ export function Login({ onLoginInvite, githubEnabled }: Props) {
   return (
     <div className="login-page">
       <div className="login-card">
-        <h1>ChunkyLink</h1>
+        <h1>ChunkyPotato</h1>
         <p className="subtitle">Document RAG System</p>
 
         {githubEnabled && (

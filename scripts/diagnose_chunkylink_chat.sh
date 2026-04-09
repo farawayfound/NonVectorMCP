@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ChunkyLink chat / Ollama diagnostics for a nanobot-style Linux host.
+# ChunkyPotato chat / Ollama diagnostics for a nanobot-style Linux host.
 # Run on the server: bash scripts/diagnose_chunkylink_chat.sh
 set -euo pipefail
 

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""NLP-based content classification and tagging for ChunkyLink."""
+"""NLP-based content classification and tagging for ChunkyPotato."""
 import re
 import logging
 from typing import List, Dict, Any

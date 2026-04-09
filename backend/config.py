@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ChunkyLink unified configuration — loaded from environment variables."""
+"""ChunkyPotato unified configuration — loaded from environment variables."""
 import os
 from pathlib import Path
 from functools import lru_cache
@@ -100,6 +100,8 @@ class Settings:
         self.CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", "0.3"))
         # Quick | Standard | Deep | Exhaustive — Quick reduces per-message CPU vs Standard
         self.CHAT_SEARCH_LEVEL = os.getenv("CHAT_SEARCH_LEVEL", "Quick")
+        # 0 = TTL disabled (LRU only); else seconds until identical search cache entries expire
+        self.SEARCH_RESULT_CACHE_TTL_SEC = int(os.getenv("SEARCH_RESULT_CACHE_TTL_SEC", "300"))
 
     def _load_dotenv(self):
         """Load .env file from project root if it exists."""

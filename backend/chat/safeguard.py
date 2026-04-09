@@ -1,18 +1,13 @@
 # -*- coding: utf-8 -*-
 """Chat safeguarding — system prompts, relevance gating, refusal logic."""
+from functools import lru_cache
+
 from backend.config import get_settings
 
 
-def get_system_prompt(mode: str = "ama") -> str:
-    """Return the system prompt for a given chat mode.
-
-    Modes:
-        ama       — Ask Me Anything (demo/resume content)
-        documents — User's own uploaded documents
-    """
-    settings = get_settings()
-    owner = settings.OWNER_NAME or "the document author"
-
+@lru_cache(maxsize=8)
+def _system_prompt_cached(mode: str, owner: str) -> str:
+    """Build system prompt for (mode, owner); cached to avoid string rebuild per message."""
     if mode == "ama":
         return (
             f"You are a helpful assistant answering questions about {owner}'s "
@@ -26,16 +21,27 @@ def get_system_prompt(mode: str = "ama") -> str:
             f"4. When referencing specific projects or experiences, cite the source document.\n"
             f"5. Do not discuss topics unrelated to {owner}'s professional profile.\n"
         )
-    else:
-        return (
-            "You are a helpful assistant answering questions based on the user's "
-            "uploaded documents. You have access to indexed content from their files.\n\n"
-            "RULES:\n"
-            "1. Only answer based on the provided context. Do not make up information.\n"
-            "2. If the context does not contain enough information to answer, say so clearly.\n"
-            "3. Be concise and direct.\n"
-            "4. Reference specific documents or sections when possible.\n"
-        )
+    return (
+        "You are a helpful assistant answering questions based on the user's "
+        "uploaded documents. You have access to indexed content from their files.\n\n"
+        "RULES:\n"
+        "1. Only answer based on the provided context. Do not make up information.\n"
+        "2. If the context does not contain enough information to answer, say so clearly.\n"
+        "3. Be concise and direct.\n"
+        "4. Reference specific documents or sections when possible.\n"
+    )
+
+
+def get_system_prompt(mode: str = "ama") -> str:
+    """Return the system prompt for a given chat mode.
+
+    Modes:
+        ama       — Ask Me Anything (demo/resume content)
+        documents — User's own uploaded documents
+    """
+    settings = get_settings()
+    owner = settings.OWNER_NAME or "the document author"
+    return _system_prompt_cached(mode, owner)
 
 
 def format_context(results: list[dict], max_chunks: int | None = None) -> str:

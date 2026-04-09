@@ -30,7 +30,7 @@ export function ChatMessage({ message }: Props) {
 
   return (
     <div className={`chat-message ${isUser ? "user" : "assistant"}`}>
-      <div className="message-role">{isUser ? "You" : "ChunkyLink"}</div>
+      <div className="message-role">{isUser ? "You" : "ChunkyPotato"}</div>
       {hasThinking && (
         <div className="thinking-block">
           <button

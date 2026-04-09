@@ -46,7 +46,7 @@ def main():
         sample = demo_uploads / "README.txt"
         if not sample.exists():
             sample.write_text(
-                "ChunkyLink Demo Content\n"
+                "ChunkyPotato Demo Content\n"
                 "=======================\n\n"
                 "Place your resume, project descriptions, and other documents here.\n"
                 "Supported formats: PDF, TXT, DOCX, PPTX, CSV\n\n"

@@ -1,6 +1,8 @@
-# ChunkyLink deployment (nanobot / self-hosted)
+# ChunkyPotato deployment (nanobot / self-hosted)
 
-This document describes how ChunkyLink is deployed on a small Linux host (example: **nanobot**, SSH user **david**, app path **`/srv/chunkylink/repo`**). Paths and hostnames are the defaults used in the helper scripts; override them with environment variables where noted.
+This document describes how ChunkyPotato is deployed on a small Linux host (example: **nanobot**, SSH user **david**, app path **`/srv/chunkylink/repo`**). Paths and hostnames are the defaults used in the helper scripts; override them with environment variables where noted.
+
+**Compatibility:** The UI product name is **ChunkyPotato**, but **`chunkylink`** remains the convention for filesystem paths, the systemd unit, the service user, the SQLite filename, session cookie name, and `CHUNKYLINK_*` environment variables—so existing servers keep working without renames.
 
 ## Layout on the server
 

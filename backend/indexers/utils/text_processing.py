@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Text processing utilities for ChunkyLink document indexing."""
+"""Text processing utilities for ChunkyPotato document indexing."""
 import re
 import hashlib
 from typing import List, Tuple, Dict, Any

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PDF processing for ChunkyLink document indexing."""
+"""PDF processing for ChunkyPotato document indexing."""
 import logging
 from pathlib import Path
 from typing import List, Dict, Any

@@ -21,7 +21,7 @@ export function Layout({ user, onLogout, children }: Props) {
     <div className="app-layout">
       <header className="app-header">
         <div className="header-left">
-          <Link to="/" className="logo">ChunkyLink</Link>
+          <Link to="/" className="logo">ChunkyPotato</Link>
           <nav className="nav-links">
             {navItems.map((item) => (
               <Link

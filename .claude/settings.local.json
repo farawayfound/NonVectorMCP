@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ssh david@macmini 'bash -lc \"echo homedir=$\\(ls ~\\) && ls /Applications/ 2>/dev/null | grep -i brew && ls /opt/ 2>/dev/null && ls /usr/local/ 2>/dev/null | head -5\"')"
+    ]
+  }
+}

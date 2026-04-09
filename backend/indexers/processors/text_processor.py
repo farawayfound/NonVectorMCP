@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Text, DOCX, and PPTX processing for ChunkyLink document indexing."""
+"""Text, DOCX, and PPTX processing for ChunkyPotato document indexing."""
 import logging
 from pathlib import Path
 from typing import List, Dict, Any

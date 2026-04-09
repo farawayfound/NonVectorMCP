@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ChunkyLink document indexer — builds JSONL knowledge base from source documents."""
+"""ChunkyPotato document indexer — builds JSONL knowledge base from source documents."""
 import re
 import json
 import hashlib

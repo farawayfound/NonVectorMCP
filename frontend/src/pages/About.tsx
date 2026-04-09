@@ -3,29 +3,32 @@ const GITHUB_URL = "https://github.com/farawayfound/ChunkyLink";
 export function About() {
   return (
     <div className="about-page">
-      <h2>About ChunkyLink</h2>
+      <h2>About ChunkyPotato</h2>
 
       <div className="about-panel">
         <section className="about-section">
           <h3>What this is</h3>
           <p>
-            <strong>ChunkyLink</strong> is a self-hosted{" "}
+            <strong>ChunkyPotato</strong> is a self-hosted{" "}
             <abbr title="Retrieval-Augmented Generation">RAG</abbr> system I built as a portfolio demo: it answers
             questions from an indexed knowledge base instead of guessing from the model alone. The{" "}
             <strong>Ask Me Anything</strong> experience is grounded in a curated corpus (résumé and project narrative);
             signed-in users can also upload and chat with their own documents. The goal is to show how ingestion, NLP
             metadata, retrieval, safety checks, and streaming APIs fit together in a real stack—not a slide-deck
-            architecture diagram.
+            architecture diagram. The product name is a gentle confession about where it actually runs.
           </p>
         </section>
 
         <section className="about-section">
           <h3>Where it runs</h3>
           <p>
-            Please be patient with inference latency, as this instance is entirely hosted on a mini-PC
-            at my home office: an <strong>AMD Ryzen 7430U</strong> mini PC with{" "} <strong>32&nbsp;GB DDR4</strong> RAM, 
-            running Linux with <strong>local LLM</strong>(Ollama) inference. This setup is designed
-            to be highly available, low-maintenance, and cost-effective.
+            The whole operation—web app, API, indexing jobs, SQLite, and the{" "}
+            <strong>local LLM</strong> doing its best impression of a polymath—sits on what can only be described as{" "}
+            <strong>starch-class infrastructure</strong>: a small home Linux box with roughly the ego of a datacenter
+            and roughly the thermal budget of a baked side dish. There is no cloud GPU fairy; just Ollama, patience,
+            and silicon that believes in you. If responses feel thoughtful, that may be the model reasoning—or the
+            machine taking a moment to marshal enough electrons for another token. Either way, it is cost-effective,
+            low-maintenance, and refreshingly honest about its limits.
           </p>
         </section>
 
@@ -36,8 +39,9 @@ export function About() {
             It is based on a system I designed and deployed for internal usage at Spectrum (Charter Communications) in technical debt maintenance.
           </p>
           <p>
-            The system works by through local processing for indexing, searching, reteival, and database tasks: 
-            bypassing the need for a dedicated API LLM Endpoint and minimizing token utilization. AI agents invoke and interact with the system via the MCP server.
+            The system relies on local processing for indexing, searching, retrieval, and database tasks—bypassing the
+            need for a hosted LLM API and keeping token spend small. AI agents invoke and interact with the system via
+            the MCP server.
           </p>
           <ul className="about-list">
             <li>
@@ -59,7 +63,7 @@ export function About() {
             </li>
             <li>
               <strong>RAG pipeline</strong> — Query handling → retrieval from the KB → <strong>relevance gating</strong>{" "}
-              (symetrical cross-referencing, deduplication, and ranking) → prompt assembly →
+              (symmetrical cross-referencing, deduplication, and ranking) → prompt assembly →
               streamed answer.
             </li>
             <li>
@@ -89,8 +93,9 @@ export function About() {
         </section>
 
         <p className="muted about-footnote">
-          First-token latency on this hardware is on the order of many seconds—this is a demo project, and a useful
-          reminder that local RAG is as much an ops and sizing problem as a modeling one.
+          First-token latency here is measured in “please stretch your legs” time. That is not a bug; it is the sound of
+          local RAG meeting humble hardware. If the assistant pauses, assume it is either retrieving citations or
+          negotiating with a very small potato for one more FLOP.
         </p>
       </div>
     </div>

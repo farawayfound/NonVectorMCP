@@ -35,7 +35,7 @@ if [[ -d "${REPO}/.git" ]]; then
 fi
 
 if [[ ! -d "${REPO}/backend" ]]; then
-  echo "Expected ChunkyLink app at ${REPO} (missing backend/). Aborting."
+  echo "Expected ChunkyPotato app at ${REPO} (missing backend/). Aborting."
   exit 1
 fi
 

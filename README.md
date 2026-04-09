@@ -1,4 +1,4 @@
-# ChunkyLink
+# ChunkyPotato
 
 Self-hostable document RAG system with local LLM inference. No vector database — uses chunk-based search with NLP classification and semantic cross-references.
 
@@ -39,4 +39,4 @@ cd docker && docker compose up
 
 ## Target Hardware
 
-Designed for modest self-hosting: Ryzen 5 mini PC, 32GB RAM, Ollama local inference.
+Designed for modest self-hosting: a small Linux machine at home is enough. This demo runs on decidedly humble hardware with **Ollama**—think “potato cosplaying as a server,” not a rack of accelerators.

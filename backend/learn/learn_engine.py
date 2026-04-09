@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ChunkyLink learn engine — quality-gated, dedup-checked knowledge ingestion."""
+"""ChunkyPotato learn engine — quality-gated, dedup-checked knowledge ingestion."""
 import hashlib
 import json
 import logging

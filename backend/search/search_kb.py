@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ChunkyLink knowledge base search engine — multi-phase ranked retrieval."""
+"""ChunkyPotato knowledge base search engine — multi-phase ranked retrieval."""
 import re
 import json
 import logging
@@ -7,6 +7,8 @@ import threading
 import time
 import hashlib
 import asyncio
+import copy
+from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -29,11 +31,14 @@ _DOMAIN_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("glossary",   re.compile(r'\b(what does|mean|definition|acronym|stands for)\b', re.I)),
 ]
 
-_RESULT_CACHE: dict[str, dict] = {}
-_CACHE_MAX = 50
+# Full search response cache: LRU + optional TTL (see SEARCH_RESULT_CACHE_TTL_SEC).
+_RESULT_CACHE: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+_RESULT_CACHE_MAX = 50
+_result_cache_lock = threading.Lock()
+
 # Full index list keyed only by on-disk KB files (not query-derived domains).
 # Domains vary per query; filtering domain_chunks in memory is cheap vs disk I/O.
-_ALL_CHUNKS_CACHE: dict[str, list] = {}
+_ALL_CHUNKS_CACHE: OrderedDict[str, list] = OrderedDict()
 _ALL_CHUNKS_CACHE_MAX = 3
 _all_chunks_cache_lock = threading.Lock()
 
@@ -55,14 +60,55 @@ def _kb_data_signature(kb_dir: Path) -> str:
 
 def _get_cached_all_chunks(sig: str) -> list | None:
     with _all_chunks_cache_lock:
-        return _ALL_CHUNKS_CACHE.get(sig)
+        if sig not in _ALL_CHUNKS_CACHE:
+            return None
+        _ALL_CHUNKS_CACHE.move_to_end(sig)
+        return _ALL_CHUNKS_CACHE[sig]
 
 
 def _set_cached_all_chunks(sig: str, all_chunks: list) -> None:
     with _all_chunks_cache_lock:
-        if len(_ALL_CHUNKS_CACHE) >= _ALL_CHUNKS_CACHE_MAX:
-            _ALL_CHUNKS_CACHE.pop(next(iter(_ALL_CHUNKS_CACHE)))
         _ALL_CHUNKS_CACHE[sig] = all_chunks
+        _ALL_CHUNKS_CACHE.move_to_end(sig)
+        while len(_ALL_CHUNKS_CACHE) > _ALL_CHUNKS_CACHE_MAX:
+            _ALL_CHUNKS_CACHE.popitem(last=False)
+
+
+def _result_cache_key(
+    terms: list[str],
+    query: str,
+    level: str,
+    kb_sig: str,
+    active_domains: list[str],
+    max_results: int,
+    page: int,
+    page_size: int,
+) -> str:
+    raw = json.dumps(
+        [
+            sorted(terms),
+            query.lower().strip(),
+            level,
+            kb_sig,
+            sorted(active_domains),
+            max_results,
+            page,
+            page_size,
+        ],
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.md5(raw.encode()).hexdigest()
+
+
+def _store_search_result_cache(cache_key: str, payload: dict) -> None:
+    with _result_cache_lock:
+        if cache_key in _RESULT_CACHE:
+            _RESULT_CACHE.pop(cache_key, None)
+        _RESULT_CACHE[cache_key] = (time.monotonic(), copy.deepcopy(payload))
+        _RESULT_CACHE.move_to_end(cache_key)
+        while len(_RESULT_CACHE) > _RESULT_CACHE_MAX:
+            _RESULT_CACHE.popitem(last=False)
 
 
 def _chunks_with_ids(chunks: list[dict]) -> list[dict]:
@@ -198,7 +244,32 @@ def _search_sync(
     deep_search = level in ("Deep", "Exhaustive")
 
     sig = _kb_data_signature(kb_dir)
+    cache_key = _result_cache_key(
+        terms, query, level, sig, active_domains, max_results, page, page_size,
+    )
+    ttl_sec = get_settings().SEARCH_RESULT_CACHE_TTL_SEC
+    now_mono = time.monotonic()
+    with _result_cache_lock:
+        if cache_key in _RESULT_CACHE:
+            ts, cached_payload = _RESULT_CACHE[cache_key]
+            if ttl_sec <= 0 or (now_mono - ts) <= ttl_sec:
+                _RESULT_CACHE.move_to_end(cache_key)
+                out = copy.deepcopy(cached_payload)
+                dur = round((time.monotonic() - t0) * 1000)
+                log_event(
+                    "search_kb",
+                    terms=terms,
+                    query=query,
+                    level=level,
+                    chunks_returned=len(out.get("results", [])),
+                    duration_ms=dur,
+                    result_cache_hit=True,
+                )
+                return out
+            _RESULT_CACHE.pop(cache_key, None)
+
     cached_all = _get_cached_all_chunks(sig)
+    chunk_cache_hit = cached_all is not None
     if cached_all is not None:
         all_chunks = _chunks_with_ids(cached_all)
     else:
@@ -221,7 +292,27 @@ def _search_sync(
     if not phase1:
         phase1 = [c for c in domain_chunks if _matches_terms(c, terms, min_hits=1)]
     if not phase1:
-        return {"results": [], "total": 0, "level": level, "phases": {}, "page": 1, "total_pages": 0}
+        empty_payload = {
+            "results": [],
+            "total": 0,
+            "level": level,
+            "phases": {},
+            "page": 1,
+            "total_pages": 0,
+        }
+        duration_ms = round((time.monotonic() - t0) * 1000)
+        log_event(
+            "search_kb",
+            terms=terms,
+            query=query,
+            level=level,
+            chunks_returned=0,
+            duration_ms=duration_ms,
+            result_cache_hit=False,
+            chunk_cache_hit=chunk_cache_hit,
+        )
+        _store_search_result_cache(cache_key, empty_payload)
+        return empty_payload
 
     # Phase 2: Discover tags/keywords
     tag_freq: dict[str, int] = {}
@@ -370,10 +461,18 @@ def _search_sync(
         phase_counts[mt] = phase_counts.get(mt, 0) + 1
 
     duration_ms = round((time.monotonic() - t0) * 1000)
-    log_event("search_kb", terms=terms, query=query, level=level,
-              chunks_returned=len(page_results), duration_ms=duration_ms)
+    log_event(
+        "search_kb",
+        terms=terms,
+        query=query,
+        level=level,
+        chunks_returned=len(page_results),
+        duration_ms=duration_ms,
+        result_cache_hit=False,
+        chunk_cache_hit=chunk_cache_hit,
+    )
 
-    return {
+    result_payload = {
         "results": page_results,
         "total": total_ranked,
         "page": page,
@@ -386,3 +485,7 @@ def _search_sync(
         "top_tags": top_tags[:5],
         "discovered": discovered_keywords[:10],
     }
+
+    _store_search_result_cache(cache_key, result_payload)
+
+    return result_payload

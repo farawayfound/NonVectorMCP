@@ -1,5 +1,5 @@
 #!/bin/bash
-# ChunkyLink — deploy / refresh on the server (e.g. nanobot).
+# ChunkyPotato — deploy / refresh on the server (e.g. nanobot).
 #
 # Prerequisite: /srv/chunkylink/repo is a git clone with .env present (not committed).
 #
