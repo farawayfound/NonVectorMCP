@@ -31,8 +31,6 @@ export interface ChatStreamEvent {
   text?: string;
   thinking?: string;
   phase?: string;
-  /** Emitted when the model never used </think> — all "thinking" content is actually the response. */
-  promote_thinking_to_text?: boolean;
 }
 
 export async function* streamChat(

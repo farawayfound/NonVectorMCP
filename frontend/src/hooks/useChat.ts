@@ -109,25 +109,6 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
               return updated;
             });
           }
-          if (event.promote_thinking_to_text) {
-            // Non-reasoning model: the model never emitted </think>, so everything
-            // streamed into the thinking block is actually the response. Move it to content.
-            await transitionPhase("answering");
-            answering = true;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last.role === "assistant" && last.thinking) {
-                updated[updated.length - 1] = {
-                  ...last,
-                  content: last.thinking,
-                  thinking: "",
-                  thinkingDone: true,
-                };
-              }
-              return updated;
-            });
-          }
         }
       } catch (err) {
         const detail = err instanceof Error ? err.message : String(err);

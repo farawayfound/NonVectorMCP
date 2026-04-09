@@ -306,12 +306,19 @@ async def generate_stream(
     temperature: float = 0.3,
     max_tokens: int = 2048,
     latency: dict | None = None,
-) -> AsyncIterator[str]:
-    """Stream a completion from Ollama, yielding text chunks.
+) -> AsyncIterator[tuple[str, str]]:
+    """Stream a completion from Ollama, yielding ``(kind, text)`` tuples.
 
-    If ``latency`` is a dict, it is filled with:
+    *kind* is ``"thinking"`` for reasoning-trace tokens or ``"text"`` for
+    visible answer tokens.  Ollama's ``think`` parameter is always enabled so
+    models that support structured thinking return the trace in a dedicated
+    ``thinking`` field.  Models without thinking support simply return
+    everything via the ``response`` field — the ``thinking`` field will be
+    absent / empty and all tuples will be ``("text", ...)``.
+
+    If *latency* is a dict it is filled with:
     - ollama_connect_ms: time until HTTP stream is ready (response headers OK)
-    - ttft_ms: time until first non-empty model token
+    - ttft_ms: time until first non-empty model token (thinking or text)
     - stream_total_ms: time until stream completes
     """
     settings = get_settings()
@@ -322,6 +329,7 @@ async def generate_stream(
         "model": model,
         "prompt": prompt,
         "stream": True,
+        "think": True,
         "keep_alive": -1,
         "options": {
             "temperature": temperature,
@@ -340,7 +348,7 @@ async def generate_stream(
 
     stream_timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
 
-    async def _run_stream(client: httpx.AsyncClient) -> AsyncIterator[str]:
+    async def _run_stream(client: httpx.AsyncClient) -> AsyncIterator[tuple[str, str]]:
         ttft_recorded = False
         async with client.stream("POST", url, json=payload, timeout=stream_timeout) as resp:
             resp.raise_for_status()
@@ -351,12 +359,15 @@ async def generate_stream(
                     continue
                 try:
                     chunk = json.loads(line)
+                    thinking = chunk.get("thinking", "")
                     text = chunk.get("response", "")
-                    if text and latency is not None and not ttft_recorded:
+                    if (thinking or text) and latency is not None and not ttft_recorded:
                         latency["ttft_ms"] = round((time.monotonic() - t_req) * 1000)
                         ttft_recorded = True
+                    if thinking:
+                        yield ("thinking", thinking)
                     if text:
-                        yield text
+                        yield ("text", text)
                     if chunk.get("done", False):
                         _capture_inference_stats(chunk)
                         if latency is not None:
@@ -383,10 +394,11 @@ async def generate(
     temperature: float = 0.3,
     max_tokens: int = 2048,
 ) -> str:
-    """Non-streaming completion — collects full response."""
+    """Non-streaming completion — collects full response (text only, thinking discarded)."""
     parts = []
-    async for chunk in generate_stream(prompt, system, model, temperature, max_tokens):
-        parts.append(chunk)
+    async for kind, text in generate_stream(prompt, system, model, temperature, max_tokens):
+        if kind == "text":
+            parts.append(text)
     return "".join(parts)
 
 
@@ -396,8 +408,11 @@ async def chat_stream(
     temperature: float = 0.3,
     max_tokens: int = 2048,
     latency: dict | None = None,
-) -> AsyncIterator[str]:
-    """Stream a chat completion from Ollama /api/chat, yielding text chunks."""
+) -> AsyncIterator[tuple[str, str]]:
+    """Stream a chat completion from Ollama /api/chat, yielding ``(kind, text)`` tuples.
+
+    See :func:`generate_stream` for the semantics of *kind* and *latency*.
+    """
     settings = get_settings()
     model = model or settings.OLLAMA_MODEL
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
@@ -406,6 +421,7 @@ async def chat_stream(
         "model": model,
         "messages": messages,
         "stream": True,
+        "think": True,
         "keep_alive": -1,
         "options": {
             "temperature": temperature,
@@ -422,7 +438,7 @@ async def chat_stream(
 
     stream_timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
 
-    async def _run_chat_stream(client: httpx.AsyncClient) -> AsyncIterator[str]:
+    async def _run_chat_stream(client: httpx.AsyncClient) -> AsyncIterator[tuple[str, str]]:
         ttft_recorded = False
         async with client.stream("POST", url, json=payload, timeout=stream_timeout) as resp:
             resp.raise_for_status()
@@ -433,12 +449,16 @@ async def chat_stream(
                     continue
                 try:
                     chunk = json.loads(line)
-                    text = chunk.get("message", {}).get("content", "")
-                    if text and latency is not None and not ttft_recorded:
+                    msg = chunk.get("message", {})
+                    thinking = msg.get("thinking", "")
+                    text = msg.get("content", "")
+                    if (thinking or text) and latency is not None and not ttft_recorded:
                         latency["ttft_ms"] = round((time.monotonic() - t_req) * 1000)
                         ttft_recorded = True
+                    if thinking:
+                        yield ("thinking", thinking)
                     if text:
-                        yield text
+                        yield ("text", text)
                     if chunk.get("done", False):
                         _capture_inference_stats(chunk)
                         if latency is not None:
