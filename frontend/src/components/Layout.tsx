@@ -18,6 +18,7 @@ export function Layout({ user, onLogout, children }: Props) {
     { path: "/", label: "Ask Me Anything" },
     ...(user ? [{ path: "/documents", label: "Your Documents" }] : []),
     { path: "/about", label: "About" },
+    ...(user?.role === "admin" ? [{ path: "/admin", label: "Admin" }] : []),
   ];
 
   return (
@@ -44,12 +45,15 @@ export function Layout({ user, onLogout, children }: Props) {
               <button onClick={onLogout} className="btn btn-sm">Logout</button>
             </>
           ) : (
-            <button
-              onClick={() => setShowAccessModal(true)}
-              className="btn btn-sm btn-request-access"
-            >
-              Request Access
-            </button>
+            <>
+              <button
+                onClick={() => setShowAccessModal(true)}
+                className="btn btn-sm btn-request-access"
+              >
+                Request Access
+              </button>
+              <Link to="/login" className="btn btn-sm btn-primary">Login</Link>
+            </>
           )}
         </div>
       </header>

@@ -889,21 +889,12 @@ body {
 .modal-success p {
   color: var(--success);
   font-size: 15px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
-
-.modal-dev-code {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 16px;
-}
-.modal-dev-code code {
-  font-family: var(--font-mono);
-  font-size: 22px;
-  letter-spacing: 3px;
-  color: var(--primary);
+.modal-hint {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 20px;
 }
 
 /* Rate limit banner */

@@ -117,6 +117,12 @@ async def request_access(request: Request):
     client_ip = request.client.host if request.client else ""
     settings = get_settings()
 
+    if not settings.SMTP_HOST:
+        return JSONResponse(
+            {"error": "Email service is not configured. Please contact the site administrator."},
+            status_code=503,
+        )
+
     db = await get_db()
     try:
         # Rate limit: max 3 access requests per email per day
@@ -139,14 +145,14 @@ async def request_access(request: Request):
             max_uses=1, expires_at=expires,
         )
 
-        # Record the request
+        # Record the request (logs the email for tracking)
         await db.execute(
             "INSERT INTO access_requests (email, invite_code, ip_address, status) VALUES (?, ?, ?, ?)",
             (email, code, client_ip, "pending"),
         )
         await db.commit()
 
-        # Send the email
+        # Email the code — never return it directly
         sent = await send_invite_email(email, code)
         status = "sent" if sent else "email_failed"
         await db.execute(
@@ -156,10 +162,6 @@ async def request_access(request: Request):
         await db.commit()
 
         log_event("access_requested", email=email, code_prefix=code[:4], sent=sent)
-
-        if not sent and not settings.SMTP_HOST:
-            # SMTP not configured — return the code directly (dev mode)
-            return JSONResponse({"ok": True, "message": "Access code generated", "code": code})
 
         if not sent:
             return JSONResponse(

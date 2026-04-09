@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { requestAccess } from "../api/client";
 
 interface Props {
@@ -9,7 +10,7 @@ export function RequestAccessModal({ onClose }: Props) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
-  const [devCode, setDevCode] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,19 +18,20 @@ export function RequestAccessModal({ onClose }: Props) {
 
     setStatus("sending");
     setMessage("");
-    setDevCode(null);
 
     try {
       const data = await requestAccess(email.trim());
       setStatus("sent");
       setMessage(data.message || "Access code sent! Check your email.");
-      if (data.code) {
-        setDevCode(data.code);
-      }
     } catch (err: any) {
       setStatus("error");
       setMessage(err.message || "Something went wrong. Please try again.");
     }
+  };
+
+  const handleGoToLogin = () => {
+    onClose();
+    navigate("/login");
   };
 
   return (
@@ -39,20 +41,17 @@ export function RequestAccessModal({ onClose }: Props) {
 
         <h2>Request Access</h2>
         <p className="modal-subtitle">
-          Enter your email to receive an access code.
+          Enter your email and we'll send you an access code.
         </p>
 
         {status === "sent" ? (
           <div className="modal-success">
             <p>{message}</p>
-            {devCode && (
-              <div className="modal-dev-code">
-                <p className="muted">Dev mode — your code:</p>
-                <code>{devCode}</code>
-              </div>
-            )}
-            <button onClick={onClose} className="btn btn-primary btn-block">
-              Done
+            <p className="modal-hint">
+              Once you receive your code, use it on the login page to sign in.
+            </p>
+            <button onClick={handleGoToLogin} className="btn btn-primary btn-block">
+              Go to Login
             </button>
           </div>
         ) : (

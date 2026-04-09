@@ -136,6 +136,17 @@ def create_app() -> FastAPI:
     if dist.is_dir():
         app.mount("/assets", StaticFiles(directory=str(dist / "assets")), name="assets")
 
+        def serve_index() -> FileResponse:
+            # Avoid stale SPA shell after deploys (hashed asset names change).
+            return FileResponse(
+                str(dist / "index.html"),
+                headers={
+                    "Cache-Control": "no-cache, no-store, must-revalidate",
+                    "Pragma": "no-cache",
+                    "Expires": "0",
+                },
+            )
+
         @app.get("/{full_path:path}", include_in_schema=False)
         async def spa_fallback(full_path: str):
             # Serve real files that exist (favicon, robots.txt, etc.)
@@ -143,7 +154,7 @@ def create_app() -> FastAPI:
             if candidate.is_file():
                 return FileResponse(str(candidate))
             # Everything else → index.html (SPA client-side routing)
-            return FileResponse(str(dist / "index.html"))
+            return serve_index()
 
     return app
 
