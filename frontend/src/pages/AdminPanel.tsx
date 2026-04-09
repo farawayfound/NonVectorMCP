@@ -11,11 +11,20 @@ import {
   loadOllamaModel,
   unloadOllamaModel,
   streamOllamaPull,
+  setSuggestionModel,
   getDemoDocuments,
   deleteDemoDocument,
   uploadDemoDocument,
   buildDemoIndex,
   getDemoStatus,
+  getDemoSuggestions,
+  addDemoSuggestion,
+  deleteDemoSuggestion,
+  updateDemoSuggestions,
+  getDemoQA,
+  createDemoQA,
+  updateDemoQA,
+  deleteDemoQA,
   getPerfLog,
   getPerfEntry,
   getAdminConfig,
@@ -344,6 +353,7 @@ function OllamaTab() {
   const [error, setError] = useState<string | null>(null);
   const [loadingModel, setLoadingModel] = useState<string | null>(null);
   const [unloadingModel, setUnloadingModel] = useState<string | null>(null);
+  const [savingSuggModel, setSavingSuggModel] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
@@ -490,6 +500,49 @@ function OllamaTab() {
             </>
           ) : (
             <span style={{ color: "var(--text-muted)" }}>No model loaded</span>
+          )}
+        </div>
+      </div>
+
+      {/* Suggestion model selector */}
+      <div style={{ margin: "1.5rem 0" }}>
+        <h4 style={{ marginBottom: "0.5rem" }}>Suggestion Generation Model</h4>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0 0 0.5rem" }}>
+          Used to generate suggested questions when building the Demo KB index. Can be a larger, slower model for higher quality.
+        </p>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          <select
+            value={data.suggestion_model || ""}
+            onChange={async (e) => {
+              const name = e.target.value;
+              if (!name) return;
+              setSavingSuggModel(true);
+              setError(null);
+              try {
+                await setSuggestionModel(name);
+                setData((prev: any) => ({ ...prev, suggestion_model: name }));
+              } catch (err: any) {
+                setError(err.message || "Failed to set suggestion model");
+              } finally {
+                setSavingSuggModel(false);
+              }
+            }}
+            disabled={savingSuggModel}
+            style={{
+              padding: "8px 12px",
+              background: "var(--bg-card)",
+              color: "var(--text)",
+              border: "1px solid var(--border)",
+              borderRadius: "6px",
+              minWidth: "250px",
+            }}
+          >
+            {data.models?.map((m: any) => (
+              <option key={m.name} value={m.name}>{m.name}</option>
+            ))}
+          </select>
+          {savingSuggModel && (
+            <span style={{ color: "#f59e0b", fontSize: "0.85rem" }}>Saving...</span>
           )}
         </div>
       </div>
@@ -1162,6 +1215,18 @@ function DemoKBTab() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Suggestions state
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [newSuggestion, setNewSuggestion] = useState("");
+  const [editingSuggIdx, setEditingSuggIdx] = useState<number | null>(null);
+  const [editingSuggText, setEditingSuggText] = useState("");
+
+  // Q&A / STAR state
+  const [qaItems, setQaItems] = useState<any[]>([]);
+  const [showQaForm, setShowQaForm] = useState(false);
+  const [editingQaId, setEditingQaId] = useState<string | null>(null);
+  const [qaForm, setQaForm] = useState<any>({ type: "qa", question: "", answer: "", situation: "", task: "", action: "", result: "" });
+
   const loadDocs = useCallback(() => {
     getDemoDocuments().then((d) => setDocs(d.documents)).catch(() => {});
   }, []);
@@ -1170,12 +1235,21 @@ function DemoKBTab() {
     getDemoStatus().then(setStatus).catch(() => {});
   }, []);
 
+  const loadSuggestions = useCallback(() => {
+    getDemoSuggestions().then((d) => setSuggestions(d.suggestions || [])).catch(() => {});
+  }, []);
+
+  const loadQA = useCallback(() => {
+    getDemoQA().then((d) => setQaItems(d.items || [])).catch(() => {});
+  }, []);
+
   useEffect(() => {
     loadDocs();
     loadStatus();
-  }, [loadDocs, loadStatus]);
+    loadSuggestions();
+    loadQA();
+  }, [loadDocs, loadStatus, loadSuggestions, loadQA]);
 
-  // Poll for status while indexing is running
   useEffect(() => {
     if (status.job?.status === "running") {
       pollRef.current = setInterval(() => {
@@ -1184,6 +1258,7 @@ function DemoKBTab() {
           if (s.job?.status !== "running" && pollRef.current) {
             clearInterval(pollRef.current);
             pollRef.current = null;
+            loadSuggestions();
           }
         }).catch(() => {});
       }, 2000);
@@ -1191,7 +1266,7 @@ function DemoKBTab() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [status.job?.status]);
+  }, [status.job?.status, loadSuggestions]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -1231,9 +1306,120 @@ function DemoKBTab() {
     }
   };
 
+  // Suggestion handlers
+  const handleAddSuggestion = async () => {
+    if (!newSuggestion.trim()) return;
+    try {
+      const res = await addDemoSuggestion(newSuggestion.trim());
+      setSuggestions(res.suggestions);
+      setNewSuggestion("");
+    } catch (err: any) {
+      setError(err.message || "Failed to add suggestion");
+    }
+  };
+
+  const handleDeleteSuggestion = async (idx: number) => {
+    try {
+      const res = await deleteDemoSuggestion(idx);
+      setSuggestions(res.suggestions);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete suggestion");
+    }
+  };
+
+  const handleSaveSuggestionEdit = async (idx: number) => {
+    if (!editingSuggText.trim()) return;
+    const updated = [...suggestions];
+    updated[idx] = editingSuggText.trim();
+    try {
+      const res = await updateDemoSuggestions(updated);
+      setSuggestions(res.suggestions);
+      setEditingSuggIdx(null);
+      setEditingSuggText("");
+    } catch (err: any) {
+      setError(err.message || "Failed to update suggestion");
+    }
+  };
+
+  // Q&A form helpers
+  const resetQaForm = () => {
+    setQaForm({ type: "qa", question: "", answer: "", situation: "", task: "", action: "", result: "" });
+    setShowQaForm(false);
+    setEditingQaId(null);
+  };
+
+  const handleSaveQa = async () => {
+    if (!qaForm.question.trim()) {
+      setError("Question is required");
+      return;
+    }
+    try {
+      if (editingQaId) {
+        const res = await updateDemoQA(editingQaId, qaForm);
+        setQaItems(res.items);
+      } else {
+        const res = await createDemoQA(qaForm);
+        setQaItems(res.items);
+      }
+      resetQaForm();
+    } catch (err: any) {
+      setError(err.message || "Failed to save Q&A item");
+    }
+  };
+
+  const handleEditQa = (item: any) => {
+    setEditingQaId(item.id);
+    setQaForm({
+      type: item.type,
+      question: item.question || "",
+      answer: item.answer || "",
+      situation: item.situation || "",
+      task: item.task || "",
+      action: item.action || "",
+      result: item.result || "",
+    });
+    setShowQaForm(true);
+  };
+
+  const handleDeleteQa = async (id: string) => {
+    if (!confirm("Delete this Q&A item?")) return;
+    try {
+      const res = await deleteDemoQA(id);
+      setQaItems(res.items);
+    } catch (err: any) {
+      setError(err.message || "Failed to delete Q&A item");
+    }
+  };
+
   const jobStatus = status.job?.status ?? "idle";
   const totalChunks = status.total_chunks ?? 0;
   const categories: Record<string, number> = status.categories ?? {};
+
+  const sectionStyle: React.CSSProperties = {
+    padding: "1.25rem 1.5rem",
+    background: "var(--bg-card)",
+    border: "1px solid var(--border)",
+    borderRadius: "8px",
+    marginBottom: "1.5rem",
+  };
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    padding: "8px 12px",
+    background: "var(--bg)",
+    color: "var(--text)",
+    border: "1px solid var(--border)",
+    borderRadius: "6px",
+    fontSize: "0.875rem",
+    boxSizing: "border-box",
+  };
+
+  const textareaStyle: React.CSSProperties = {
+    ...inputStyle,
+    minHeight: 80,
+    fontFamily: "inherit",
+    resize: "vertical",
+  };
 
   return (
     <div>
@@ -1245,10 +1431,11 @@ function DemoKBTab() {
       {error && (
         <div className="error-banner" style={{ marginBottom: "1rem" }}>
           {error}
+          <button onClick={() => setError(null)} style={{ marginLeft: 8, background: "none", border: "none", color: "inherit", cursor: "pointer", fontWeight: 700 }}>x</button>
         </div>
       )}
 
-      {/* Upload area */}
+      {/* ── Upload area ── */}
       <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "1.5rem" }}>
         <input
           ref={fileInputRef}
@@ -1270,7 +1457,7 @@ function DemoKBTab() {
         </span>
       </div>
 
-      {/* Document list */}
+      {/* ── Document list ── */}
       {docs.length > 0 ? (
         <table className="admin-table" style={{ marginBottom: "1.5rem" }}>
           <thead>
@@ -1300,7 +1487,7 @@ function DemoKBTab() {
         </p>
       )}
 
-      {/* Index controls */}
+      {/* ── Index controls ── */}
       <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1.5rem" }}>
         <button
           className="btn btn-primary"
@@ -1322,7 +1509,7 @@ function DemoKBTab() {
         </span>
       </div>
 
-      {/* Granular build progress */}
+      {/* ── Granular build progress ── */}
       {jobStatus === "running" && (() => {
         const step = status.job?.step || "indexing";
         const detail = status.job?.detail || "";
@@ -1356,9 +1543,9 @@ function DemoKBTab() {
         );
       })()}
 
-      {/* Category breakdown */}
+      {/* ── Index Breakdown ── */}
       {Object.keys(categories).length > 0 && (
-        <div>
+        <div style={{ marginBottom: "1.5rem" }}>
           <h4 style={{ marginBottom: "0.5rem" }}>Index Breakdown</h4>
           <div className="stats-grid">
             {Object.entries(categories).map(([cat, count]) => (
@@ -1370,6 +1557,231 @@ function DemoKBTab() {
           </div>
         </div>
       )}
+
+      {/* ── Generated Suggested Questions ── */}
+      <div style={sectionStyle}>
+        <h4 style={{ margin: "0 0 0.4rem" }}>Generated Suggested Questions</h4>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0 0 0.75rem" }}>
+          These questions appear as conversation starters for visitors. They are regenerated each time you build the index;
+          manual edits persist until the next rebuild.
+        </p>
+
+        {suggestions.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "0.75rem" }}>
+            {suggestions.map((q, idx) => (
+              <div
+                key={idx}
+                style={{
+                  display: "flex",
+                  gap: "0.5rem",
+                  alignItems: "center",
+                  padding: "6px 10px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                  fontSize: "0.875rem",
+                }}
+              >
+                {editingSuggIdx === idx ? (
+                  <>
+                    <input
+                      value={editingSuggText}
+                      onChange={(e) => setEditingSuggText(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSaveSuggestionEdit(idx)}
+                      style={{ ...inputStyle, flex: 1 }}
+                      autoFocus
+                    />
+                    <button className="btn btn-sm btn-primary" onClick={() => handleSaveSuggestionEdit(idx)}>Save</button>
+                    <button className="btn btn-sm" onClick={() => { setEditingSuggIdx(null); setEditingSuggText(""); }}
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                    >Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ flex: 1 }}>{q}</span>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => { setEditingSuggIdx(idx); setEditingSuggText(q); }}
+                      style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", padding: "2px 8px" }}
+                      title="Edit"
+                    >Edit</button>
+                    <button
+                      className="btn btn-sm btn-danger"
+                      onClick={() => handleDeleteSuggestion(idx)}
+                      style={{ padding: "2px 8px" }}
+                      title="Remove"
+                    >Del</button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "0.75rem" }}>
+            No suggestions yet. Build the index to generate them.
+          </p>
+        )}
+
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          <input
+            placeholder="Add a suggested question…"
+            value={newSuggestion}
+            onChange={(e) => setNewSuggestion(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddSuggestion()}
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={handleAddSuggestion}
+            disabled={!newSuggestion.trim()}
+          >Add</button>
+        </div>
+      </div>
+
+      {/* ── Default Q&A and STAR Stories ── */}
+      <div style={sectionStyle}>
+        <h4 style={{ margin: "0 0 0.4rem" }}>Default Q&A and STAR Stories</h4>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0 0 0.75rem" }}>
+          Curated question-answer pairs and behavioral STAR stories. These are injected into the index on each build
+          and their questions are always included in suggestions.
+        </p>
+
+        {qaItems.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "1rem" }}>
+            {qaItems.map((item) => (
+              <div
+                key={item.id}
+                style={{
+                  padding: "10px 14px",
+                  background: "var(--bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "6px",
+                }}
+              >
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "flex-start", marginBottom: "4px" }}>
+                  <span style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    padding: "2px 6px",
+                    borderRadius: "4px",
+                    flexShrink: 0,
+                    background: item.type === "star"
+                      ? "color-mix(in srgb, #f59e0b 15%, var(--bg-card))"
+                      : "color-mix(in srgb, var(--accent) 15%, var(--bg-card))",
+                    color: item.type === "star" ? "#f59e0b" : "var(--accent)",
+                  }}>
+                    {item.type === "star" ? "STAR" : "Q&A"}
+                  </span>
+                  <span style={{ flex: 1, fontWeight: 500, fontSize: "0.9rem" }}>{item.question}</span>
+                  <button
+                    className="btn btn-sm"
+                    onClick={() => handleEditQa(item)}
+                    style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)", padding: "2px 8px" }}
+                  >Edit</button>
+                  <button
+                    className="btn btn-sm btn-danger"
+                    onClick={() => handleDeleteQa(item.id)}
+                    style={{ padding: "2px 8px" }}
+                  >Del</button>
+                </div>
+                {item.type === "qa" && item.answer && (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginLeft: "3rem", whiteSpace: "pre-wrap" }}>
+                    {item.answer.length > 200 ? item.answer.slice(0, 200) + "…" : item.answer}
+                  </div>
+                )}
+                {item.type === "star" && (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-muted)", marginLeft: "3rem" }}>
+                    {["situation", "task", "action", "result"].map((f) => item[f] ? (
+                      <div key={f} style={{ marginTop: 2 }}>
+                        <strong style={{ textTransform: "capitalize" }}>{f}:</strong>{" "}
+                        {(item[f] as string).length > 120 ? (item[f] as string).slice(0, 120) + "…" : item[f]}
+                      </div>
+                    ) : null)}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add / Edit form */}
+        {showQaForm ? (
+          <div style={{ padding: "14px", background: "var(--bg)", border: "1px solid var(--border)", borderRadius: "6px" }}>
+            <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", marginBottom: "0.75rem" }}>
+              <label style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text-muted)" }}>Type:</label>
+              <button
+                className={`btn btn-sm${qaForm.type === "qa" ? " btn-primary" : ""}`}
+                style={qaForm.type !== "qa" ? { background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" } : {}}
+                onClick={() => setQaForm((f: any) => ({ ...f, type: "qa" }))}
+              >Q&A</button>
+              <button
+                className={`btn btn-sm${qaForm.type === "star" ? " btn-primary" : ""}`}
+                style={qaForm.type !== "star" ? { background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" } : {}}
+                onClick={() => setQaForm((f: any) => ({ ...f, type: "star" }))}
+              >STAR</button>
+            </div>
+
+            <div style={{ marginBottom: "0.5rem" }}>
+              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Question</label>
+              <input
+                value={qaForm.question}
+                onChange={(e) => setQaForm((f: any) => ({ ...f, question: e.target.value }))}
+                placeholder="e.g. Tell me about a time you led a difficult project."
+                style={inputStyle}
+              />
+            </div>
+
+            {qaForm.type === "qa" ? (
+              <div style={{ marginBottom: "0.5rem" }}>
+                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4 }}>Answer</label>
+                <textarea
+                  value={qaForm.answer}
+                  onChange={(e) => setQaForm((f: any) => ({ ...f, answer: e.target.value }))}
+                  placeholder="The curated answer..."
+                  style={textareaStyle}
+                />
+              </div>
+            ) : (
+              <>
+                {(["situation", "task", "action", "result"] as const).map((field) => (
+                  <div key={field} style={{ marginBottom: "0.5rem" }}>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: 4, textTransform: "capitalize" }}>{field}</label>
+                    <textarea
+                      value={qaForm[field]}
+                      onChange={(e) => setQaForm((f: any) => ({ ...f, [field]: e.target.value }))}
+                      placeholder={
+                        field === "situation" ? "Describe the context and challenge..."
+                          : field === "task" ? "What was your responsibility?"
+                          : field === "action" ? "What specific steps did you take?"
+                          : "What was the outcome?"
+                      }
+                      style={textareaStyle}
+                    />
+                  </div>
+                ))}
+              </>
+            )}
+
+            <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+              <button className="btn btn-primary" onClick={handleSaveQa}>
+                {editingQaId ? "Save Changes" : "Add Item"}
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                onClick={resetQaForm}
+              >Cancel</button>
+            </div>
+          </div>
+        ) : (
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { resetQaForm(); setShowQaForm(true); }}
+          >Add Q&A / STAR Story</button>
+        )}
+      </div>
     </div>
   );
 }

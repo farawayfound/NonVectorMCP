@@ -135,6 +135,8 @@ class Settings:
                 self.SYSTEM_PROMPT_OVERRIDE = data["system_prompt"] or None
             if data.get("system_rules") is not None:
                 self.SYSTEM_RULES_OVERRIDE = data["system_rules"] or None
+            if data.get("suggestion_model"):
+                self.SUGGESTION_MODEL = data["suggestion_model"]
         except Exception:
             pass
 
@@ -146,6 +148,7 @@ class Settings:
             "num_ctx": self.OLLAMA_NUM_CTX,
             "system_prompt": self.SYSTEM_PROMPT_OVERRIDE or "",
             "system_rules": self.SYSTEM_RULES_OVERRIDE or "",
+            "suggestion_model": self.SUGGESTION_MODEL,
         }
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

@@ -30,11 +30,60 @@ ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".pptx", ".csv"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
+def _inject_curated_chunks(index_dir: Path) -> int:
+    """Write default Q&A/STAR items as searchable chunks in the index."""
+    items = _read_qa()
+    if not items:
+        return 0
+
+    detail_dir = index_dir / "detail"
+    detail_dir.mkdir(parents=True, exist_ok=True)
+    main_chunks = detail_dir / "chunks.jsonl"
+    curated_chunks = detail_dir / "chunks.curated.jsonl"
+
+    chunks = []
+    for item in items:
+        if item["type"] == "star":
+            text = (
+                f"Q: {item['question']}\n\n"
+                f"Situation: {item.get('situation', '')}\n"
+                f"Task: {item.get('task', '')}\n"
+                f"Action: {item.get('action', '')}\n"
+                f"Result: {item.get('result', '')}"
+            )
+        else:
+            text = f"Q: {item['question']}\nA: {item.get('answer', '')}"
+
+        chunk = {
+            "id": f"curated::{item['id']}",
+            "text": text,
+            "metadata": {
+                "nlp_category": "curated",
+                "curated": True,
+                "qa_type": item["type"],
+                "source": "admin_default_qa",
+            },
+            "tags": ["curated", item["type"]],
+            "related_chunks": [],
+        }
+        chunks.append(chunk)
+
+    with open(curated_chunks, "w", encoding="utf-8") as f:
+        for c in chunks:
+            f.write(json.dumps(c, ensure_ascii=False) + "\n")
+
+    with open(main_chunks, "a", encoding="utf-8") as f:
+        for c in chunks:
+            f.write(json.dumps(c, ensure_ascii=False) + "\n")
+
+    return len(chunks)
+
+
 def _run_demo_index():
     """Run demo KB indexing in background thread with granular progress tracking."""
     global _demo_job
     try:
-        # Phase 1: Indexing documents
+        # Phase 1: Index uploaded documents
         _demo_job = {"status": "running", "step": "indexing", "detail": "Building document index", "error": None}
         from backend.indexers.build_index import main as build_main
         src = str(get_demo_upload_dir())
@@ -42,7 +91,13 @@ def _run_demo_index():
         build_main(src_dir=src, out_dir=out)
         log_event("demo_index_complete")
 
-        # Phase 2+3: Generate and validate suggested questions
+        # Phase 2: Inject curated Q&A/STAR chunks
+        _demo_job = {"status": "running", "step": "indexing", "detail": "Injecting curated Q&A chunks", "error": None}
+        n_curated = _inject_curated_chunks(get_demo_index_dir())
+        if n_curated:
+            logging.info(f"Injected {n_curated} curated chunks into demo index")
+
+        # Phase 3+4: Generate and validate suggested questions
         def _progress_cb(step: str, detail: str):
             global _demo_job
             _demo_job = {"status": "running", "step": step, "detail": detail, "error": None}
@@ -55,6 +110,17 @@ def _run_demo_index():
             log_event("demo_suggestions_generated")
         except Exception as e:
             logging.warning(f"Suggestion generation failed (non-fatal): {e}")
+
+        # Phase 5: Merge curated questions into suggestions
+        qa_items = _read_qa()
+        if qa_items:
+            curated_questions = [item["question"] for item in qa_items if item.get("question")]
+            suggestions = _read_suggestions()
+            existing = set(suggestions)
+            for q in curated_questions:
+                if q not in existing:
+                    suggestions.insert(0, q)
+            _write_suggestions(suggestions)
 
         _demo_job = {"status": "complete", "step": "complete", "detail": None, "error": None}
     except Exception as e:
@@ -201,6 +267,7 @@ async def admin_ollama(request: Request, user: dict = Depends(require_admin)):
     return {
         "ollama": status,
         "configured_model": settings.OLLAMA_MODEL,
+        "suggestion_model": settings.SUGGESTION_MODEL,
         "models": models,
         "loaded_models": loaded,
         "loaded_names": loaded_names,
@@ -299,6 +366,22 @@ async def admin_ollama_unload_model(
         return {"status": "unloaded", "name": name}
     except Exception as e:
         raise HTTPException(500, f"Failed to unload model: {e}")
+
+
+@router.put("/ollama/suggestion-model")
+async def admin_set_suggestion_model(
+    request: Request, user: dict = Depends(require_admin),
+):
+    """Set which Ollama model is used for generating suggested questions during index build."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    settings = get_settings()
+    settings.SUGGESTION_MODEL = name
+    settings.save_admin_config()
+    log_event("suggestion_model_changed", user_id=user["user_id"], model=name)
+    return {"status": "ok", "suggestion_model": name}
 
 
 # ── Chat Performance Log ─────────────────────────────────────────────────────
@@ -554,3 +637,170 @@ async def demo_index_status(request: Request, user: dict = Depends(require_admin
         "total_chunks": chunk_count,
         "categories": categories,
     }
+
+
+# ── Suggestions CRUD ─────────────────────────────────────────────────────────
+
+def _suggestions_path() -> Path:
+    return get_demo_index_dir() / "suggestions.json"
+
+
+def _read_suggestions() -> list[str]:
+    path = _suggestions_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("suggestions", [])
+    except Exception:
+        return []
+
+
+def _write_suggestions(items: list[str]) -> None:
+    path = _suggestions_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"suggestions": items}, indent=2), encoding="utf-8")
+
+
+@router.get("/demo/suggestions")
+async def demo_list_suggestions(request: Request, user: dict = Depends(require_admin)):
+    """Return the current list of generated suggested questions."""
+    return {"suggestions": _read_suggestions()}
+
+
+@router.put("/demo/suggestions")
+async def demo_update_suggestions(request: Request, user: dict = Depends(require_admin)):
+    """Overwrite the full suggestions list."""
+    body = await request.json()
+    items = body.get("suggestions", [])
+    if not isinstance(items, list) or not all(isinstance(s, str) for s in items):
+        raise HTTPException(400, "suggestions must be a list of strings")
+    _write_suggestions(items)
+    log_event("demo_suggestions_updated", user_id=user["user_id"], count=len(items))
+    return {"suggestions": items}
+
+
+@router.post("/demo/suggestions")
+async def demo_add_suggestion(request: Request, user: dict = Depends(require_admin)):
+    """Add a single question to the suggestions list."""
+    body = await request.json()
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "question is required")
+    items = _read_suggestions()
+    items.append(question)
+    _write_suggestions(items)
+    log_event("demo_suggestion_added", user_id=user["user_id"])
+    return {"suggestions": items}
+
+
+@router.delete("/demo/suggestions/{index}")
+async def demo_delete_suggestion(
+    index: int, request: Request, user: dict = Depends(require_admin),
+):
+    """Remove a suggestion by its list index."""
+    items = _read_suggestions()
+    if index < 0 or index >= len(items):
+        raise HTTPException(404, "Suggestion index out of range")
+    removed = items.pop(index)
+    _write_suggestions(items)
+    log_event("demo_suggestion_deleted", user_id=user["user_id"], question=removed[:80])
+    return {"suggestions": items}
+
+
+# ── Default Q&A / STAR Stories CRUD ──────────────────────────────────────────
+
+def _qa_path() -> Path:
+    return get_settings().DATA_DIR / "demo_default_qa.json"
+
+
+def _read_qa() -> list[dict]:
+    path = _qa_path()
+    if not path.exists():
+        return []
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data.get("items", [])
+    except Exception:
+        return []
+
+
+def _write_qa(items: list[dict]) -> None:
+    path = _qa_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"items": items}, indent=2), encoding="utf-8")
+
+
+@router.get("/demo/qa")
+async def demo_list_qa(request: Request, user: dict = Depends(require_admin)):
+    """List all default Q&A and STAR story items."""
+    return {"items": _read_qa()}
+
+
+@router.post("/demo/qa")
+async def demo_create_qa(request: Request, user: dict = Depends(require_admin)):
+    """Create a new Q&A or STAR story item."""
+    import uuid
+    body = await request.json()
+    item_type = body.get("type", "qa")
+    question = (body.get("question") or "").strip()
+    if not question:
+        raise HTTPException(400, "question is required")
+    if item_type not in ("qa", "star"):
+        raise HTTPException(400, "type must be 'qa' or 'star'")
+
+    item: dict = {"id": str(uuid.uuid4()), "type": item_type, "question": question}
+    if item_type == "qa":
+        item["answer"] = (body.get("answer") or "").strip()
+    else:
+        for field in ("situation", "task", "action", "result"):
+            item[field] = (body.get(field) or "").strip()
+
+    items = _read_qa()
+    items.append(item)
+    _write_qa(items)
+    log_event("demo_qa_created", user_id=user["user_id"], item_type=item_type)
+    return {"item": item, "items": items}
+
+
+@router.put("/demo/qa/{item_id}")
+async def demo_update_qa(
+    item_id: str, request: Request, user: dict = Depends(require_admin),
+):
+    """Update an existing Q&A or STAR story item."""
+    body = await request.json()
+    items = _read_qa()
+    target = next((i for i in items if i["id"] == item_id), None)
+    if not target:
+        raise HTTPException(404, "Item not found")
+
+    if "question" in body:
+        target["question"] = (body["question"] or "").strip()
+    if "type" in body and body["type"] in ("qa", "star"):
+        target["type"] = body["type"]
+    if target["type"] == "qa":
+        if "answer" in body:
+            target["answer"] = (body["answer"] or "").strip()
+    else:
+        for field in ("situation", "task", "action", "result"):
+            if field in body:
+                target[field] = (body[field] or "").strip()
+
+    _write_qa(items)
+    log_event("demo_qa_updated", user_id=user["user_id"], item_id=item_id)
+    return {"item": target, "items": items}
+
+
+@router.delete("/demo/qa/{item_id}")
+async def demo_delete_qa(
+    item_id: str, request: Request, user: dict = Depends(require_admin),
+):
+    """Delete a Q&A or STAR story item."""
+    items = _read_qa()
+    before = len(items)
+    items = [i for i in items if i["id"] != item_id]
+    if len(items) == before:
+        raise HTTPException(404, "Item not found")
+    _write_qa(items)
+    log_event("demo_qa_deleted", user_id=user["user_id"], item_id=item_id)
+    return {"items": items}

@@ -181,6 +181,28 @@ export const getPerfLog = (page = 1, pageSize = 20) =>
   request<any>(`/admin/perf?page=${page}&page_size=${pageSize}`);
 export const getPerfEntry = (id: number) => request<any>(`/admin/perf/${id}`);
 
+// Admin — Suggestion model
+export const setSuggestionModel = (name: string) =>
+  request<any>("/admin/ollama/suggestion-model", { method: "PUT", body: JSON.stringify({ name }) });
+
+// Admin — Demo KB suggestions
+export const getDemoSuggestions = () => request<any>("/admin/demo/suggestions");
+export const updateDemoSuggestions = (suggestions: string[]) =>
+  request<any>("/admin/demo/suggestions", { method: "PUT", body: JSON.stringify({ suggestions }) });
+export const addDemoSuggestion = (question: string) =>
+  request<any>("/admin/demo/suggestions", { method: "POST", body: JSON.stringify({ question }) });
+export const deleteDemoSuggestion = (index: number) =>
+  request<any>(`/admin/demo/suggestions/${index}`, { method: "DELETE" });
+
+// Admin — Default Q&A / STAR stories
+export const getDemoQA = () => request<any>("/admin/demo/qa");
+export const createDemoQA = (item: Record<string, unknown>) =>
+  request<any>("/admin/demo/qa", { method: "POST", body: JSON.stringify(item) });
+export const updateDemoQA = (id: string, item: Record<string, unknown>) =>
+  request<any>(`/admin/demo/qa/${id}`, { method: "PUT", body: JSON.stringify(item) });
+export const deleteDemoQA = (id: string) =>
+  request<any>(`/admin/demo/qa/${id}`, { method: "DELETE" });
+
 // Admin — Runtime configuration
 export const getAdminConfig = () => request<any>("/admin/config");
 export const updateAdminConfig = (body: Record<string, unknown>) =>
