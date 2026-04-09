@@ -11,11 +11,12 @@ export function About() {
           <p>
             <strong>ChunkyPotato</strong> is a self-hosted{" "}
             <abbr title="Retrieval-Augmented Generation">RAG</abbr> system I built as a portfolio demo: it answers
-            questions from an indexed knowledge base instead of guessing from the model alone. The{" "}
-            <strong>Ask Me Anything</strong> experience is grounded in a curated corpus (résumé and project narrative);
-            signed-in users can also upload and chat with their own documents. The goal is to show how ingestion, NLP
-            metadata, retrieval, safety checks, and streaming APIs fit together in a real stack—not a slide-deck
-            architecture diagram. The product name is a gentle confession about where it actually runs.
+            questions from an ingested index, adding key knowledge to the model's context window. The{" "}
+            <strong>Ask Me Anything</strong> experience is grounded in a personal corpus (résumé, professional expereince narratives, 
+            academic and personal projects);
+            signed-in users can also upload and chat with their own documents for index building. The documents and your index will be deleted after session end for your privacy and security.
+            The goal is to show how ingestion, NLP metadata, retrieval, safety checks, and streaming APIs fit together in a real stack—not a slide-deck
+            architecture diagram. The product name is a humorous confession about where it actually runs.
           </p>
         </section>
 
@@ -23,12 +24,11 @@ export function About() {
           <h3>Where it runs</h3>
           <p>
             The whole operation—web app, API, indexing jobs, SQLite, and the{" "}
-            <strong>local LLM</strong> doing its best impression of a polymath—sits on what can only be described as{" "}
-            <strong>starch-class infrastructure</strong>: a small home Linux box with roughly the ego of a datacenter
-            and roughly the thermal budget of a baked side dish. There is no cloud GPU fairy; just Ollama, patience,
-            and silicon that believes in you. If responses feel thoughtful, that may be the model reasoning—or the
-            machine taking a moment to marshal enough electrons for another token. Either way, it is cost-effective,
-            low-maintenance, and refreshingly honest about its limits.
+            <strong>local LLM</strong> doing its best impression of me—sits on what can only be described as{" "}
+            <strong>starch-class infrastructure</strong>: a mini-pc with roughly the thermal budget of a my coffee mug. There is no cloud GPU fairy; just Ollama, patience,
+            and silicon with a dream. If responses feel thoughtful, that may be the model reasoning—or the
+            machine taking a moment to gather enough electrons for another token. Either way, it is cost-effective,
+            low-maintenance, and honest about its limits.
           </p>
         </section>
 

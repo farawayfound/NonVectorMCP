@@ -30,7 +30,7 @@ const EXPERIENCE: ExperienceItem[] = [
       "Builds production AI systems for video operations: Amazon Q–based triage assistants, local LLM runtimes, MCP servers with OCR/NLP indexing, self-learning knowledge bases, admin dashboards, and GitLab CI/CD—while mentoring teams on agentic development and presenting to senior leadership.",
     bullets: [
       "Spearheaded AI ingestion pipelines, inference integrations, and self-updating knowledge indices for agentic technical triage assistants using Amazon Q (Claude 4.6) on AWS servers.",
-      "Architected a scalable, low-cost local runtime framework for LLM models, reducing token utilization from thousands of tokens per response to user configurable limits while providing internal teams with robust, secure, highly relevant, and economical AI context.",
+      "Architected a scalable, low-cost local runtime framework for LLM models, reducing token utilization from hundreds ofthousands of tokens per response to user configurable limits while providing internal teams with robust, secure, highly relevant, and economical AI context.",
       "Engineered Model Context Protocol (MCP) and Agent Orchestrator physical server on intranet, automatically indexing data from shared Knowledge Base and work notes through OCR and NLP classification and providing tool use such as Database querying and API integrations.",
       "Self-learning feature checks discovered data through triage sessions against existing indices and automatically adds version-controlled, managed chunks to a “learned” index.",
       "Built an administrator Dashboard to monitor MCP Server tools usage, Knowledge repository and source files management with index building options, structured database administration, client identities and authorizations, output quality monitoring, and catch warnings and errors.",
@@ -269,9 +269,9 @@ export function MyResume() {
           </a>
         </p>
         <p className="resume-hero__summary">
-          Tenacious Software Engineer and US Air Force veteran with 5+ years of experience specializing in .NET, Azure,
-          and AI-assisted development. Proven track record of leveraging large language models, advanced prompt
-          engineering, and agentic coding workflows to accelerate enterprise software delivery. Passionate technology
+          Tenacious Software Engineer and US Air Force veteran with 7+ years of experience specializing in .NET, Azure,
+          and AI integrations. Proven track record of leveraging llm's, knowlege ingestion prompt
+          engineering, and agentic workflows to accelerate enterprise software delivery. Passionate technology
           evangelist skilled at designing scalable cloud architectures, translating stakeholder requirements into
           technical acceptance criteria, developing new AI tools to maximize productivity, and mentoring teams through
           implementation and adoption.
