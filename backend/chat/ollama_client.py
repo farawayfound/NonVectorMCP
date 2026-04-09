@@ -383,16 +383,18 @@ async def generate_stream(
     *kind* is ``"thinking"`` for reasoning-trace tokens or ``"text"`` for
     visible answer tokens.
 
-    Handles thinking in two complementary ways so every model works
-    regardless of Ollama version:
+    ``think: true`` is always sent so Ollama populates the ``thinking``
+    field for models that support structured reasoning.  Three complementary
+    strategies ensure every model works regardless of Ollama version:
 
-    1. **Native separation** — recent Ollama versions auto-populate a
-       ``thinking`` field for models whose template declares thinking
-       support.  Content in that field is yielded as ``("thinking", ...)``.
+    1. **Native separation** — the ``thinking`` field from Ollama is yielded
+       directly as ``("thinking", ...)``.
     2. **Tag fallback** — the ``response`` field is fed through
        ``_ThinkTagParser`` which detects ``<think>...</think>`` tags
-       (e.g. from older Ollama or models it does not recognise).  Everything
-       outside those tags is yielded as ``("text", ...)``.
+       (older Ollama or unrecognised models).
+    3. **Promotion safety net** — the caller (``chat_service``) re-emits
+       thinking as text if the model produced no visible response (e.g. a
+       model that spent its entire token budget on reasoning).
 
     If *latency* is a dict it is filled with:
     - ollama_connect_ms: time until HTTP stream is ready
@@ -407,6 +409,7 @@ async def generate_stream(
         "model": model,
         "prompt": prompt,
         "stream": True,
+        "think": True,
         "keep_alive": -1,
         "options": {
             "temperature": temperature,
@@ -509,6 +512,7 @@ async def chat_stream(
         "model": model,
         "messages": messages,
         "stream": True,
+        "think": True,
         "keep_alive": -1,
         "options": {
             "temperature": temperature,
