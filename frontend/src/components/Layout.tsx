@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { User } from "../types";
+import { RequestAccessModal } from "./RequestAccessModal";
 
 interface Props {
   user: User | null;
@@ -9,12 +11,13 @@ interface Props {
 
 export function Layout({ user, onLogout, children }: Props) {
   const location = useLocation();
+  const [showAccessModal, setShowAccessModal] = useState(false);
 
   const navItems = [
+    { path: "/resume", label: "My Resume" },
     { path: "/", label: "Ask Me Anything" },
     ...(user ? [{ path: "/documents", label: "Your Documents" }] : []),
     { path: "/about", label: "About" },
-    ...(user?.role === "admin" ? [{ path: "/admin", label: "Admin" }] : []),
   ];
 
   return (
@@ -35,23 +38,25 @@ export function Layout({ user, onLogout, children }: Props) {
           </nav>
         </div>
         <div className="header-right">
-          <Link
-            to="/resume"
-            className={`header-resume-link${location.pathname === "/resume" ? " active" : ""}`}
-          >
-            My Resume
-          </Link>
           {user ? (
             <>
               <span className="user-name">{user.display_name || user.github_username || "Guest"}</span>
               <button onClick={onLogout} className="btn btn-sm">Logout</button>
             </>
           ) : (
-            <Link to="/login" className="btn btn-sm btn-primary">Login</Link>
+            <button
+              onClick={() => setShowAccessModal(true)}
+              className="btn btn-sm btn-request-access"
+            >
+              Request Access
+            </button>
           )}
         </div>
       </header>
       <main className="app-main">{children}</main>
+      {showAccessModal && (
+        <RequestAccessModal onClose={() => setShowAccessModal(false)} />
+      )}
     </div>
   );
 }
