@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """Per-user document storage and index namespace isolation."""
+import json
 import shutil
 from pathlib import Path
 from datetime import datetime, timezone
 from backend.config import get_settings
+
+MAX_USER_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024  # 2 GB total per user
 
 
 def get_demo_upload_dir() -> Path:
@@ -74,7 +77,6 @@ def get_user_chunking_config(user_id: str) -> dict:
     }
     if config_path.exists():
         try:
-            import json
             saved = json.loads(config_path.read_text(encoding="utf-8"))
             defaults.update({k: v for k, v in saved.items() if k in defaults})
         except Exception:
@@ -84,7 +86,6 @@ def get_user_chunking_config(user_id: str) -> dict:
 
 def save_user_chunking_config(user_id: str, config: dict) -> dict:
     """Persist per-user chunking config. Returns the saved config."""
-    import json
     allowed_keys = {"chunk_size", "chunk_overlap", "enable_nlp_tagging"}
     current = get_user_chunking_config(user_id)
     for k, v in config.items():
@@ -97,7 +98,6 @@ def save_user_chunking_config(user_id: str, config: dict) -> dict:
 
 def get_user_token_metrics(user_id: str) -> dict:
     """Compute token metrics: chunks in index, tokens in chunks, tokens in raw docs, savings."""
-    import json
     index_dir = get_user_index_dir(user_id)
     upload_dir = get_user_upload_dir(user_id)
 
@@ -142,7 +142,6 @@ def get_user_token_metrics(user_id: str) -> dict:
 
 def get_user_agent_config(user_id: str) -> dict:
     """Load per-user agent config (system prompt and rules overrides)."""
-    import json
     config_path = get_user_index_dir(user_id) / "agent_config.json"
     defaults = {"system_prompt": "", "system_rules": ""}
     if config_path.exists():
@@ -158,7 +157,6 @@ def get_user_agent_config(user_id: str) -> dict:
 
 def save_user_agent_config(user_id: str, config: dict) -> dict:
     """Persist per-user agent config (system prompt and rules). Returns the saved config."""
-    import json
     allowed_keys = {"system_prompt", "system_rules"}
     current = get_user_agent_config(user_id)
     for k, v in config.items():
@@ -167,6 +165,47 @@ def save_user_agent_config(user_id: str, config: dict) -> dict:
     config_path = get_user_index_dir(user_id) / "agent_config.json"
     config_path.write_text(json.dumps(current, indent=2), encoding="utf-8")
     return current
+
+
+def get_user_total_upload_size(user_id: str) -> int:
+    """Return total bytes of all uploaded files for a user."""
+    upload_dir = get_settings().UPLOADS_DIR / "users" / user_id
+    if not upload_dir.exists():
+        return 0
+    total = 0
+    for f in upload_dir.iterdir():
+        if f.is_file() and not f.name.startswith("."):
+            total += f.stat().st_size
+    return total
+
+
+def _preserve_flag_path(user_id: str) -> Path:
+    return get_user_index_dir(user_id) / "preserve_data.json"
+
+
+def get_preserve_data_flag(user_id: str) -> dict:
+    """Return the preserve-data preference for a user."""
+    path = _preserve_flag_path(user_id)
+    if path.exists():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"preserve": False}
+
+
+def set_preserve_data_flag(user_id: str, preserve: bool) -> dict:
+    """Set whether this user's data should survive logout/session expiry."""
+    path = _preserve_flag_path(user_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {"preserve": preserve}
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return data
+
+
+def should_preserve_user_data(user_id: str) -> bool:
+    """Check if this user opted to preserve their data."""
+    return get_preserve_data_flag(user_id).get("preserve", False)
 
 
 def delete_user_data(user_id: str) -> None:

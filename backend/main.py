@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone, timedelta
 
 from pathlib import Path
 
@@ -42,6 +43,78 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
                       error_type=type(ex).__name__, error=str(ex),
                       duration_ms=round((time.monotonic() - t0) * 1000))
             raise
+
+
+INACTIVITY_CLEANUP_MINUTES = 20
+
+
+async def _session_cleanup() -> None:
+    """Periodically clean up expired sessions and inactive user data.
+
+    Runs every 5 minutes. Removes data for users whose sessions have expired
+    or who have been inactive for more than INACTIVITY_CLEANUP_MINUTES,
+    unless they opted to preserve their data.
+    """
+    await asyncio.sleep(60)  # wait for app startup
+    while True:
+        try:
+            from backend.database import get_db
+            from backend.storage import should_preserve_user_data, delete_user_data
+            from backend.storage import get_user_upload_dir
+
+            db = await get_db()
+            try:
+                now = datetime.now(timezone.utc)
+
+                # 1) Find expired sessions and clean up their user data
+                cursor = await db.execute(
+                    "SELECT DISTINCT user_id FROM sessions WHERE expires_at < ?",
+                    (now.isoformat(),),
+                )
+                expired_rows = await cursor.fetchall()
+                for row in expired_rows:
+                    uid = dict(row)["user_id"]
+                    if not should_preserve_user_data(uid):
+                        delete_user_data(uid)
+                        logging.info("cleanup: wiped data for expired session user %s", uid)
+                # Delete the expired session rows
+                await db.execute(
+                    "DELETE FROM sessions WHERE expires_at < ?",
+                    (now.isoformat(),),
+                )
+                await db.commit()
+
+                # 2) Find users inactive for > INACTIVITY_CLEANUP_MINUTES with
+                #    active sessions but who have uploaded documents
+                cutoff = (now - timedelta(minutes=INACTIVITY_CLEANUP_MINUTES)).isoformat()
+                cursor = await db.execute(
+                    "SELECT DISTINCT s.user_id FROM sessions s "
+                    "JOIN users u ON s.user_id = u.id "
+                    "WHERE u.last_seen < ? AND s.expires_at >= ?",
+                    (cutoff, now.isoformat()),
+                )
+                inactive_rows = await cursor.fetchall()
+                for row in inactive_rows:
+                    uid = dict(row)["user_id"]
+                    if not should_preserve_user_data(uid):
+                        # Only clean if user actually has uploaded data
+                        upload_dir = get_user_upload_dir(uid)
+                        has_files = any(
+                            f.is_file() and not f.name.startswith(".")
+                            for f in upload_dir.iterdir()
+                        ) if upload_dir.exists() else False
+                        if has_files:
+                            delete_user_data(uid)
+                            logging.info("cleanup: wiped data for inactive user %s (>%d min)",
+                                         uid, INACTIVITY_CLEANUP_MINUTES)
+                await db.commit()
+            finally:
+                await db.close()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.warning("session_cleanup: error — %s", exc)
+        await asyncio.sleep(300)  # run every 5 minutes
 
 
 async def _model_keepalive() -> None:
@@ -90,12 +163,16 @@ async def lifespan(app: FastAPI):
         logging.warning("ollama startup warm failed (keepalive will retry): %s", exc)
     # Keep the Ollama model warm so first-token latency stays predictable
     keepalive_task = asyncio.create_task(_model_keepalive())
+    # Periodically clean up expired/inactive sessions and their user data
+    cleanup_task = asyncio.create_task(_session_cleanup())
     yield
     keepalive_task.cancel()
-    try:
-        await keepalive_task
-    except asyncio.CancelledError:
-        pass
+    cleanup_task.cancel()
+    for task in (keepalive_task, cleanup_task):
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
     await close_ollama_http()
 
 

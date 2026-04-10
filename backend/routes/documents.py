@@ -12,6 +12,9 @@ from backend.storage import (
     get_user_chunking_config, save_user_chunking_config,
     get_user_token_metrics,
     get_user_agent_config, save_user_agent_config,
+    get_user_total_upload_size, delete_user_data,
+    get_preserve_data_flag, set_preserve_data_flag,
+    MAX_USER_UPLOAD_BYTES,
 )
 from backend.logger import log_event
 
@@ -45,6 +48,17 @@ async def upload_document(
     content = await file.read()
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(400, f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)} MB")
+
+    # Enforce 2 GB total upload limit per user
+    current_total = get_user_total_upload_size(user["user_id"])
+    if current_total + len(content) > MAX_USER_UPLOAD_BYTES:
+        used_mb = round(current_total / (1024 * 1024))
+        limit_gb = MAX_USER_UPLOAD_BYTES // (1024 * 1024 * 1024)
+        raise HTTPException(
+            400,
+            f"Upload would exceed the {limit_gb} GB total limit. "
+            f"Currently using {used_mb} MB. Delete some files first.",
+        )
 
     # Sanitize filename
     safe_name = Path(file.filename).name
@@ -148,3 +162,44 @@ async def update_agent_config(request: Request, user: dict = Depends(require_aut
     saved = save_user_agent_config(user["user_id"], body)
     log_event("agent_config_update", user_id=user["user_id"])
     return saved
+
+
+@router.delete("/all")
+async def delete_all_documents(request: Request, user: dict = Depends(require_auth)):
+    """Delete ALL documents and indexes for the authenticated user."""
+    delete_user_data(user["user_id"])
+    log_event("documents_delete_all", user_id=user["user_id"])
+    return {"status": "deleted", "message": "All documents and indexes removed."}
+
+
+@router.get("/preserve")
+async def get_preserve(request: Request, user: dict = Depends(require_auth)):
+    """Get the user's data preservation preference."""
+    flag = get_preserve_data_flag(user["user_id"])
+    # Include session expiry info so frontend can show retention window
+    from backend.database import get_db
+    db = await get_db()
+    try:
+        from backend.auth.middleware import SESSION_COOKIE
+        token = request.cookies.get(SESSION_COOKIE)
+        expires_at = None
+        if token:
+            cursor = await db.execute(
+                "SELECT expires_at FROM sessions WHERE token = ?", (token,)
+            )
+            row = await cursor.fetchone()
+            if row:
+                expires_at = dict(row)["expires_at"]
+        return {**flag, "session_expires_at": expires_at}
+    finally:
+        await db.close()
+
+
+@router.put("/preserve")
+async def set_preserve(request: Request, user: dict = Depends(require_auth)):
+    """Set the user's data preservation preference."""
+    body = await request.json()
+    preserve = bool(body.get("preserve", False))
+    result = set_preserve_data_flag(user["user_id"], preserve)
+    log_event("preserve_data_set", user_id=user["user_id"], preserve=preserve)
+    return result

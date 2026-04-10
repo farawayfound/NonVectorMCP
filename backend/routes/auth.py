@@ -192,7 +192,17 @@ async def auth_status(user: dict = Depends(get_current_user)):
 
 @router.post("/logout")
 async def logout(request: Request):
+    # Identify user before destroying the session
+    user = await get_current_user(request)
     await destroy_session(request)
+
+    # Wipe user documents/indexes unless they opted to preserve
+    if user:
+        from backend.storage import should_preserve_user_data, delete_user_data
+        if not should_preserve_user_data(user["user_id"]):
+            delete_user_data(user["user_id"])
+            log_event("user_data_cleaned", user_id=user["user_id"], reason="logout")
+
     response = JSONResponse({"ok": True})
     response.delete_cookie(SESSION_COOKIE)
     return response

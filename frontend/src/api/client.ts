@@ -122,6 +122,15 @@ export const getAgentConfig = () => request<any>("/documents/agent-config");
 export const updateAgentConfig = (body: Record<string, unknown>) =>
   request<any>("/documents/agent-config", { method: "PUT", body: JSON.stringify(body) });
 
+// Delete all user documents and indexes
+export const deleteAllDocuments = () =>
+  request<any>("/documents/all", { method: "DELETE" });
+
+// Preserve data preference
+export const getPreserveFlag = () => request<any>("/documents/preserve");
+export const setPreserveFlag = (preserve: boolean) =>
+  request<any>("/documents/preserve", { method: "PUT", body: JSON.stringify({ preserve }) });
+
 // Admin
 export const getAdminStats = () => request<any>("/admin/stats");
 export const getAdminUsers = () => request<any>("/admin/users");

@@ -11,6 +11,9 @@ import {
   getTokenMetrics,
   getAgentConfig,
   updateAgentConfig,
+  deleteAllDocuments,
+  getPreserveFlag,
+  setPreserveFlag,
 } from "../api/client";
 import type { Document, IndexStatus, ChunkingConfig, TokenMetrics } from "../types";
 
@@ -26,6 +29,10 @@ export function useDocuments() {
     system_rules: string;
     default_system_prompt: string;
     default_system_rules: string;
+  } | null>(null);
+  const [preserveData, setPreserveData] = useState<{
+    preserve: boolean;
+    session_expires_at: string | null;
   } | null>(null);
 
   const refresh = useCallback(async () => {
@@ -112,13 +119,36 @@ export function useDocuments() {
     return saved;
   }, [refreshAgentConfig]);
 
+  const deleteAll = useCallback(async () => {
+    await deleteAllDocuments();
+    setDocuments([]);
+    setIndexStatus(null);
+    setMetrics(null);
+  }, []);
+
+  const refreshPreserve = useCallback(async () => {
+    try {
+      const flag = await getPreserveFlag();
+      setPreserveData(flag);
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  const savePreserve = useCallback(async (preserve: boolean) => {
+    const result = await setPreserveFlag(preserve);
+    await refreshPreserve();
+    return result;
+  }, [refreshPreserve]);
+
   return {
     documents, loading, indexStatus,
     chunkingConfig, metrics, metricsLoading,
-    agentConfig,
-    refresh, upload, remove,
+    agentConfig, preserveData,
+    refresh, upload, remove, deleteAll,
     startIndex, refreshIndex,
     refreshConfig, saveConfig, refreshMetrics,
     refreshAgentConfig, saveAgentConfig,
+    refreshPreserve, savePreserve,
   };
 }

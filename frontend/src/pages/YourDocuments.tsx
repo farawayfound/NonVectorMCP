@@ -13,11 +13,12 @@ export function YourDocuments() {
   const {
     documents, loading, indexStatus,
     chunkingConfig, metrics, metricsLoading,
-    agentConfig,
-    refresh, upload, remove,
+    agentConfig, preserveData,
+    refresh, upload, remove, deleteAll,
     startIndex, refreshIndex,
     refreshConfig, saveConfig, refreshMetrics,
     refreshAgentConfig, saveAgentConfig,
+    refreshPreserve, savePreserve,
   } = useDocuments();
   const { messages, streaming, phase, send, clear } = useChat("/chat/documents");
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,13 +29,26 @@ export function YourDocuments() {
   const [agentSaving, setAgentSaving] = useState<string | null>(null);
   const [agentSuccess, setAgentSuccess] = useState<string | null>(null);
 
+  // Preserve data checkbox (local draft, not saved until Confirm)
+  const [preserveChecked, setPreserveChecked] = useState(false);
+  const [preserveConfirmed, setPreserveConfirmed] = useState(false);
+
   useEffect(() => {
     refresh();
     refreshIndex();
     refreshConfig();
     refreshMetrics();
     refreshAgentConfig();
-  }, [refresh, refreshIndex, refreshConfig, refreshMetrics, refreshAgentConfig]);
+    refreshPreserve();
+  }, [refresh, refreshIndex, refreshConfig, refreshMetrics, refreshAgentConfig, refreshPreserve]);
+
+  // Sync preserve checkbox with server state
+  useEffect(() => {
+    if (preserveData) {
+      setPreserveChecked(preserveData.preserve);
+      setPreserveConfirmed(preserveData.preserve);
+    }
+  }, [preserveData]);
 
   // Sync drafts when agentConfig loads
   useEffect(() => {
@@ -86,7 +100,7 @@ export function YourDocuments() {
 
   const textareaStyle: React.CSSProperties = {
     width: "100%",
-    minHeight: 100,
+    minHeight: 200,
     padding: "10px 12px",
     background: "var(--bg)",
     color: "var(--text)",
@@ -106,7 +120,24 @@ export function YourDocuments() {
   return (
     <div className="documents-page">
       <div className="documents-sidebar">
-        <h2>Your Documents</h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <h2 style={{ margin: 0 }}>Your Documents</h2>
+          {documents.length > 0 && (
+            <button
+              className="btn btn-sm btn-danger"
+              style={{ fontSize: "0.75rem", padding: "3px 10px" }}
+              onClick={async () => {
+                if (!confirm("Delete ALL your documents and indexes? This cannot be undone.")) return;
+                await deleteAll();
+                refresh();
+                refreshIndex();
+                refreshMetrics();
+              }}
+            >
+              Delete All
+            </button>
+          )}
+        </div>
         <UploadZone onUpload={upload} />
 
         <div className="document-list">
@@ -293,6 +324,83 @@ export function YourDocuments() {
           {!savedRules && (
             <div style={{ marginTop: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
               Using admin default rules.
+            </div>
+          )}
+        </div>
+
+        {/* ── Preserve Data ── */}
+        <div style={{
+          marginTop: "auto",
+          paddingTop: "1.25rem",
+          borderTop: "1px solid var(--border)",
+        }}>
+          <label style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "0.5rem",
+            cursor: "pointer",
+            fontSize: "0.82rem",
+          }}>
+            <input
+              type="checkbox"
+              checked={preserveChecked}
+              onChange={(e) => {
+                setPreserveChecked(e.target.checked);
+                // If unchecking, auto-save immediately
+                if (!e.target.checked && preserveConfirmed) {
+                  savePreserve(false);
+                  setPreserveConfirmed(false);
+                  agentFlash("Data will be cleared on logout.");
+                }
+              }}
+              style={{ marginTop: "2px" }}
+            />
+            <span>Preserve data for next session</span>
+          </label>
+          {preserveChecked && !preserveConfirmed && (
+            <div style={{
+              marginTop: "0.5rem",
+              padding: "8px 10px",
+              background: "color-mix(in srgb, #f59e0b 8%, var(--bg-card))",
+              border: "1px solid color-mix(in srgb, #f59e0b 25%, var(--border))",
+              borderRadius: "6px",
+              fontSize: "0.78rem",
+              color: "var(--text-muted)",
+            }}>
+              <p style={{ margin: "0 0 0.5rem" }}>
+                Your documents and index will be kept
+                {preserveData?.session_expires_at
+                  ? ` until ${new Date(preserveData.session_expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+                  : ""
+                } or until your next login.
+              </p>
+              <p style={{ margin: "0 0 0.5rem" }}>
+                If unchecked, all data is automatically wiped on logout or after 20 minutes of inactivity.
+              </p>
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={async () => {
+                  await savePreserve(true);
+                  setPreserveConfirmed(true);
+                  agentFlash("Data will be preserved.");
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          )}
+          {preserveConfirmed && (
+            <div style={{ marginTop: "0.4rem", fontSize: "0.75rem", color: "var(--success)" }}>
+              Data will be preserved
+              {preserveData?.session_expires_at
+                ? ` until ${new Date(preserveData.session_expires_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`
+                : ""
+              }.
+            </div>
+          )}
+          {!preserveChecked && !preserveConfirmed && (
+            <div style={{ marginTop: "0.3rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              Data is cleared on logout or after 20 min of inactivity.
             </div>
           )}
         </div>
