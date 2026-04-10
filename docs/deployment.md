@@ -215,6 +215,7 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`git pull --ff-only` failed** / “local changes would be overwritten” | Uncommitted edits or diverged history. If **GitHub** should win: **`sudo DEPLOY_RESET_HARD=1 bash …/deploy_chunkylink.sh`** or **`sudo git -C /srv/chunkylink/repo fetch origin && sudo git -C /srv/chunkylink/repo reset --hard origin/main`**. |
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |
+| **Mac mini:** chat still uses **nemotron** after **`setup_macmini.sh`** | **`admin_config.json`** (under **`DATA_DIR`**) stores **`ollama_model`** and overrides **`.env`**. The setup script now rewrites legacy nemotron/llama defaults in both **`.env`** and **`~/chunkylink/data/admin_config.json`**. Restart: **`launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"`**. To pin the stack default on any model: **`CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL=1 bash scripts/setup_macmini.sh`**. |
 
 ## Script reference (repository paths)
 
