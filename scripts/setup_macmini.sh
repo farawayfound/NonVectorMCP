@@ -128,82 +128,36 @@ if [[ ! -f ".env" ]]; then
     warn "Edit $INSTALL_DIR/.env to add your GitHub OAuth credentials and OWNER_NAME!"
 fi
 
-# Align OLLAMA_MODEL with the stack default when still on a legacy default, or when
-# forcing (CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL=1). Skips custom models (e.g. mistral).
-# Also sync data/admin_config.json: ollama_model there overrides .env at app startup.
-sync_ollama_model_config() {
-    local env_file="$INSTALL_DIR/.env"
-    [[ -f "$env_file" ]] || return 0
-    local current="" line
-    line=$(grep -E '^[[:space:]]*OLLAMA_MODEL=' "$env_file" 2>/dev/null | tail -1 || true)
-    if [[ -n "$line" ]]; then
-        current="${line#*=}"
-        current="${current%%#*}"
-        current="${current%"${current##*[![:space:]]}"}"
-        current="${current#"${current%%[![:space:]]*}"}"
-        current="${current//$'\r'/}"
-        current="${current#\"}"
-        current="${current%\"}"
-        current="${current#\'}"
-        current="${current%\'}"
-    fi
-    local update_env=0
-    if [[ -n "${CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL:-}" ]]; then
-        update_env=1
-    elif [[ -z "$current" ]]; then
-        update_env=1
-    elif [[ "$current" == nemotron-mini:4b || "$current" == nemotron-3-nano:4b ]]; then
-        update_env=1
-    elif [[ "$current" == llama3.2 || "$current" == llama3.2:latest ]]; then
-        update_env=1
-    elif [[ "$current" == nemotron* ]]; then
-        update_env=1
-    fi
-    if [[ "$update_env" -eq 1 ]]; then
-        if grep -qE '^[[:space:]]*OLLAMA_MODEL=' "$env_file" 2>/dev/null; then
-            sed -i '' "s|^[[:space:]]*OLLAMA_MODEL=.*|OLLAMA_MODEL=$DEFAULT_MODEL|g" "$env_file"
-        else
-            printf '\nOLLAMA_MODEL=%s\n' "$DEFAULT_MODEL" >> "$env_file"
+# Align OLLAMA_MODEL with the stack default when still on a legacy value.
+# Also sync data/admin_config.json (which overrides .env at app startup).
+# Failures here must NEVER block the rest of the deploy.
+_sync_ollama_model() {
+    # ── .env ──
+    if [[ -f "$INSTALL_DIR/.env" ]]; then
+        # Replace only known legacy models; leave custom choices alone
+        if grep -qE '^[[:space:]]*OLLAMA_MODEL=[[:space:]]*(nemotron|llama3\.2)' "$INSTALL_DIR/.env" 2>/dev/null; then
+            sed -i '' "s|^[[:space:]]*OLLAMA_MODEL=.*|OLLAMA_MODEL=$DEFAULT_MODEL|g" "$INSTALL_DIR/.env"
+            ok "OLLAMA_MODEL in .env → $DEFAULT_MODEL"
         fi
-        ok "OLLAMA_MODEL in .env → $DEFAULT_MODEL"
     fi
 
-    local admin_cfg="$DATA_DIR/admin_config.json"
-    if [[ -f "$admin_cfg" ]]; then
-        local ac_msg
-        ac_msg=$(OLLAMA_DEFAULT_MODEL="$DEFAULT_MODEL" OLLAMA_ADMIN_CFG="$admin_cfg" \
-            CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL="${CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL:-}" \
-            "$PYTHON" - << 'PY'
-import json
-import os
-from pathlib import Path
-
-path = Path(os.environ["OLLAMA_ADMIN_CFG"])
-default = os.environ["OLLAMA_DEFAULT_MODEL"]
-force = bool(os.environ.get("CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL", "").strip())
-
-def is_legacy(s: str) -> bool:
-    s = (s or "").strip()
-    if not s:
-        return True
-    if s in ("nemotron-mini:4b", "nemotron-3-nano:4b", "llama3.2", "llama3.2:latest"):
-        return True
-    return s.startswith("nemotron")
-
-data = json.loads(path.read_text(encoding="utf-8"))
-cur = (data.get("ollama_model") or "").strip()
-if not force and not is_legacy(cur):
-    raise SystemExit(0)
-if data.get("ollama_model") != default:
-    data["ollama_model"] = default
-    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print("admin_config.json: ollama_model →", default)
-PY
-)
-        [[ -n "$ac_msg" ]] && ok "${ac_msg//$'\r'/}"
-    fi
+    # ── admin_config.json ──
+    local cfg="$DATA_DIR/admin_config.json"
+    [[ -f "$cfg" ]] || return 0
+    "$PYTHON" -c "
+import json, sys, pathlib
+p = pathlib.Path(sys.argv[1])
+d = sys.argv[2]
+data = json.loads(p.read_text('utf-8'))
+cur = (data.get('ollama_model') or '').strip()
+if cur and not cur.startswith('nemotron') and cur not in ('llama3.2','llama3.2:latest'):
+    sys.exit(0)
+data['ollama_model'] = d
+p.write_text(json.dumps(data, indent=2) + '\n', 'utf-8')
+print('admin_config.json: ollama_model →', d)
+" "$cfg" "$DEFAULT_MODEL"
 }
-sync_ollama_model_config
+_sync_ollama_model || warn "Model config sync skipped (non-fatal) — set model via Admin UI after startup"
 
 # ── 8. Python venv + deps ─────────────────────────────────────────────────────
 if [[ ! -d "$VENV_DIR" ]]; then
