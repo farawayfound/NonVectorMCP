@@ -213,6 +213,31 @@ fi
 DIST_MTIME=$(stat -f "%m" "$DIST_INDEX")
 ok "Frontend built → frontend/dist/ (index.html mtime=$DIST_MTIME)"
 
+# ── 9b. Pre-flight: who currently owns port 8765 and any stray processes? ───
+info "Pre-flight diagnostic: existing chunkylink processes / listeners"
+echo "  — launchctl list | grep -i chunky —"
+launchctl list 2>/dev/null | grep -i chunky || echo "    (none)"
+echo "  — LaunchAgents/LaunchDaemons plists mentioning chunkylink —"
+/usr/bin/grep -lR "chunkylink" \
+    "$HOME/Library/LaunchAgents" \
+    "/Library/LaunchAgents" \
+    "/Library/LaunchDaemons" 2>/dev/null || echo "    (none beyond ours)"
+echo "  — lsof -i :8765 (TCP LISTEN) —"
+PORT_OWNERS=$(lsof -nP -iTCP:8765 -sTCP:LISTEN 2>/dev/null || true)
+if [[ -n "$PORT_OWNERS" ]]; then
+    echo "$PORT_OWNERS" | sed 's/^/    /'
+else
+    echo "    (nothing listening on :8765 yet — normal if backend is stopped)"
+fi
+echo "  — pgrep -fl 'uvicorn backend.main' —"
+pgrep -fl "uvicorn backend.main" 2>/dev/null | sed 's/^/    /' || echo "    (none)"
+echo "  — cloudflared / docker / nginx hints —"
+pgrep -fl cloudflared 2>/dev/null | sed 's/^/    /' || true
+pgrep -fl "docker.*chunky" 2>/dev/null | sed 's/^/    /' || true
+
+# Capture the PID that currently owns :8765 so we can compare after restart.
+PRE_PORT_PID=$(lsof -nP -iTCP:8765 -sTCP:LISTEN -Fp 2>/dev/null | sed -n 's/^p//p' | head -n1 || true)
+
 # ── 10. LaunchAgent (auto-start on login) ─────────────────────────────────────
 PLIST="$HOME/Library/LaunchAgents/com.chunkylink.backend.plist"
 info "Installing LaunchAgent at $PLIST..."
@@ -262,9 +287,31 @@ PLIST_EOF
 # launchd to SIGKILL the current instance and start a fresh one — which is
 # exactly what we want for a deploy.
 launchctl unload "$PLIST" 2>/dev/null || true
+launchctl bootout "gui/$(id -u)/com.chunkylink.backend" 2>/dev/null || true
 launchctl load -w "$PLIST"
 launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend" 2>/dev/null || true
 sleep 3
+
+# If something *other* than our LaunchAgent still owns :8765, report it loudly.
+AGENT_PID=$(launchctl list 2>/dev/null | awk '$3=="com.chunkylink.backend"{print $1}')
+POST_PORT_PID=$(lsof -nP -iTCP:8765 -sTCP:LISTEN -Fp 2>/dev/null | sed -n 's/^p//p' | head -n1 || true)
+if [[ -n "$POST_PORT_PID" && -n "$AGENT_PID" && "$POST_PORT_PID" != "$AGENT_PID" ]]; then
+    warn "────────────────────────────────────────────────────────────────"
+    warn "ROOT CAUSE CANDIDATE: port 8765 is owned by PID $POST_PORT_PID,"
+    warn "but the LaunchAgent 'com.chunkylink.backend' PID is $AGENT_PID."
+    warn "The script rebuilt the code and restarted the agent, but a"
+    warn "DIFFERENT process is answering HTTP requests — that's why you"
+    warn "see stale UI no matter how many times you rebuild."
+    warn ""
+    warn "Inspect the rogue process:"
+    warn "  ps -o pid,ppid,command -p $POST_PORT_PID"
+    warn "  lsof -p $POST_PORT_PID | grep -E 'cwd|txt' | head"
+    warn ""
+    warn "Kill it (safe — launchd will start the managed backend on :8765):"
+    warn "  kill $POST_PORT_PID"
+    warn "  launchctl kickstart -k \"gui/\$(id -u)/com.chunkylink.backend\""
+    warn "────────────────────────────────────────────────────────────────"
+fi
 
 # ── 10b. Verify the running backend is reading the dist we just built ────────
 info "Verifying backend sees the fresh frontend/dist..."
