@@ -49,7 +49,7 @@ export function Library() {
 
   const [view, setView] = useState<View>("list");
   const [prompt, setPrompt] = useState("");
-  const [maxSources, setMaxSources] = useState(10);
+  const [maxSources, setMaxSources] = useState(5);
   const [showOptions, setShowOptions] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<LibraryTask | null>(null);
@@ -242,10 +242,11 @@ export function Library() {
           <div className="library-input-row">
             <textarea
               value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              onChange={(e) => setPrompt(e.target.value.slice(0, 380))}
               onKeyDown={handleKeyDown}
               placeholder="e.g. Compile a report on the latest advancements in graph RAG..."
               rows={2}
+              maxLength={380}
               disabled={submitting}
             />
             <button
@@ -256,6 +257,9 @@ export function Library() {
             >
               Research
             </button>
+          </div>
+          <div style={{ textAlign: "right", fontSize: "0.75rem", color: prompt.length >= 360 ? "var(--danger, #ef4444)" : "var(--text-muted)", marginTop: "0.25rem" }}>
+            {prompt.length}/380
           </div>
           <div className="library-options-row">
             <button
