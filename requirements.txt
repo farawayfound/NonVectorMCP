@@ -18,5 +18,8 @@ rapidfuzz>=3.9.6
 spacy>=3.8.0
 pytesseract>=0.3.10
 
+# Queue / distributed worker
+redis[hiredis]>=5.0.0
+
 # NLP model (download separately: python -m spacy download en_core_web_md)
 # en_core_web_md

@@ -517,7 +517,7 @@ export function Workspace() {
                 Roughly 5 minutes per MB, more with insights enabled.
               </p>
               <p className="muted" style={{ fontSize: "0.78rem" }}>
-                You can step away — we'll email you when ChunkyPotato has finished baking their index.
+                You can step away — we'll email you when ChunkyPotato has finished baking your index.
               </p>
 
               <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", marginTop: "1rem" }}>

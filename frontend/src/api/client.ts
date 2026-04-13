@@ -260,6 +260,42 @@ export const getAdminConfig = () => request<any>("/admin/config");
 export const updateAdminConfig = (body: Record<string, unknown>) =>
   request<any>("/admin/config", { method: "PUT", body: JSON.stringify(body) });
 
+// Library — distributed research
+export const submitResearch = (prompt: string, options?: Record<string, unknown>) =>
+  request<any>("/library/research", {
+    method: "POST",
+    body: JSON.stringify({ prompt, ...options }),
+  });
+export const getLibraryTasks = () => request<any>("/library/tasks");
+export const getLibraryTask = (id: string) => request<any>(`/library/tasks/${id}`);
+export const approveLibraryTask = (id: string) =>
+  request<any>(`/library/tasks/${id}/approve`, { method: "POST" });
+export const rejectLibraryTask = (id: string) =>
+  request<any>(`/library/tasks/${id}/reject`, { method: "POST" });
+export const deleteLibraryTask = (id: string) =>
+  request<any>(`/library/tasks/${id}`, { method: "DELETE" });
+
+export function subscribeTaskStatus(taskId: string, onEvent: (data: any) => void, onDone: () => void) {
+  const es = new EventSource(`${BASE}/library/tasks/${taskId}/stream`);
+  es.onmessage = (e) => {
+    if (e.data === "[DONE]") {
+      es.close();
+      onDone();
+      return;
+    }
+    try {
+      onEvent(JSON.parse(e.data));
+    } catch {
+      // skip
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    onDone();
+  };
+  return () => es.close();
+}
+
 export async function uploadDemoDocument(file: File): Promise<any> {
   const form = new FormData();
   form.append("file", file);

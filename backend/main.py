@@ -155,6 +155,13 @@ async def lifespan(app: FastAPI):
     # Initialize database
     init_db_sync()
     await init_ollama_http()
+    # Connect Redis queue for Library (best-effort — feature degrades if Redis is down)
+    try:
+        from backend.library.queue import init_queue, close_queue as _close_queue
+        await init_queue(settings.REDIS_URL)
+        log_event("redis_connected", url=settings.REDIS_URL)
+    except Exception as exc:
+        logging.warning("redis queue init failed (Library feature disabled): %s", exc)
     # Warm model as soon as Ollama is up (first chat request avoids cold load)
     try:
         await ensure_single_model_loaded(settings.OLLAMA_MODEL)
@@ -174,6 +181,11 @@ async def lifespan(app: FastAPI):
         except asyncio.CancelledError:
             pass
     await close_ollama_http()
+    try:
+        from backend.library.queue import close_queue as _close_queue
+        await _close_queue()
+    except Exception:
+        pass
 
 
 def create_app() -> FastAPI:
@@ -196,12 +208,13 @@ def create_app() -> FastAPI:
     app.add_middleware(AccessLogMiddleware)
 
     # Import and include routers
-    from backend.routes import auth, chat, documents, index, admin
+    from backend.routes import auth, chat, documents, index, admin, library
     app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
     app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
     app.include_router(index.router, prefix="/api/index", tags=["index"])
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+    app.include_router(library.router, prefix="/api/library", tags=["library"])
 
     @app.get("/api/health")
     async def health():

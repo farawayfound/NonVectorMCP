@@ -8,6 +8,7 @@ import { Workspace } from "./pages/Workspace";
 import { AdminPanel } from "./pages/AdminPanel";
 import { About } from "./pages/About";
 import { MyResume } from "./pages/MyResume";
+import { Library } from "./pages/Library";
 
 export default function App() {
   const { user, loading, githubEnabled, loginInvite, logout } = useAuth();
@@ -36,6 +37,14 @@ export default function App() {
             }
           />
           <Route path="/documents" element={<Navigate to="/workspace" replace />} />
+          <Route
+            path="/library"
+            element={
+              <AuthGuard user={user} loading={loading}>
+                <Library />
+              </AuthGuard>
+            }
+          />
           <Route
             path="/admin"
             element={

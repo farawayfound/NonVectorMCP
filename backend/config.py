@@ -116,6 +116,11 @@ class Settings:
         # 0 = TTL disabled (LRU only); else seconds until identical search cache entries expire
         self.SEARCH_RESULT_CACHE_TTL_SEC = int(os.getenv("SEARCH_RESULT_CACHE_TTL_SEC", "300"))
 
+        # ── Library / Distributed Worker ──
+        self.REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        self.NANOBOT_API_KEY = os.getenv("NANOBOT_API_KEY", "")
+        self.LIBRARY_ARTIFACTS_DIR = self.DATA_DIR / "library"
+
         # ── Runtime admin overrides (mutable; persisted to DATA_DIR/admin_config.json) ──
         # These are set/updated via the admin Configuration tab at runtime.
         # "Default" overrides apply to the Your Documents agent only.

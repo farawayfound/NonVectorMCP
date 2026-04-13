@@ -17,6 +17,7 @@ export function Layout({ user, onLogout, children }: Props) {
     { path: "/resume", label: "My Resume" },
     { path: "/", label: "Ask Me Anything" },
     ...(user ? [{ path: "/workspace", label: "Workspace" }] : []),
+    ...(user ? [{ path: "/library", label: "Library" }] : []),
     { path: "/about", label: "About" },
     ...(user?.role === "admin" ? [{ path: "/admin", label: "Admin" }] : []),
   ];
