@@ -34,7 +34,7 @@ export function About() {
             The research pipeline has since been promoted to its own device: meet the{" "}
             <strong>Nanobot</strong>—a second machine that sits next to the first machine and is also
             not a data center. It pulls research jobs off a Redis queue, runs its own Ollama instance (
-            <code className="monospace">gemma3:27b</code>, because apparently one underpowered LLM was not enough),
+            <code className="monospace">gemma4:e4b</code>, because apparently one underpowered LLM was not enough),
             crawls the web, synthesizes reports, and posts the results back over the local network. This is
             what engineers mean when they say "distributed systems." The distribution is mostly heat.
           </p>
@@ -108,7 +108,7 @@ export function About() {
           </p>
         </section>
 
-        <p className=”muted about-footnote”>
+        <p className="muted about-footnote">
           First-token latency is measured in “please stretch your legs” time. That is not a bug; it is the sound of
           local RAG meeting humble hardware. If the assistant pauses, it is either retrieving citations or the
           main potato is waiting on the Nanobot, which is waiting on its own Ollama, which is having a moment.
