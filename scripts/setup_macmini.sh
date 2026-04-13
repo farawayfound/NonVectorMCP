@@ -199,12 +199,19 @@ info "Downloading spaCy model (en_core_web_md)..."
 ok "Python environment ready"
 
 # ── 9. Frontend build ─────────────────────────────────────────────────────────
-info "Building frontend..."
+info "Building frontend (clean)..."
 cd frontend
+# Wipe prior dist + vite cache so a stale build can never shadow a fresh one.
+rm -rf dist node_modules/.vite 2>/dev/null || true
 npm ci --silent
 npm run build
 cd ..
-ok "Frontend built → frontend/dist/"
+DIST_INDEX="$INSTALL_DIR/frontend/dist/index.html"
+if [[ ! -f "$DIST_INDEX" ]]; then
+    die "Frontend build produced no frontend/dist/index.html — aborting before restart."
+fi
+DIST_MTIME=$(stat -f "%m" "$DIST_INDEX")
+ok "Frontend built → frontend/dist/ (index.html mtime=$DIST_MTIME)"
 
 # ── 10. LaunchAgent (auto-start on login) ─────────────────────────────────────
 PLIST="$HOME/Library/LaunchAgents/com.chunkylink.backend.plist"
@@ -248,10 +255,40 @@ cat > "$PLIST" << PLIST_EOF
 </plist>
 PLIST_EOF
 
-# Load (or reload) the agent
+# Load (or reload) the agent.
+# Race note: `unload` can return before the old uvicorn has finished its lifespan
+# shutdown, so a plain `load -w` right after sometimes races KeepAlive and
+# the OLD process keeps serving requests for a while. `kickstart -k` forces
+# launchd to SIGKILL the current instance and start a fresh one — which is
+# exactly what we want for a deploy.
 launchctl unload "$PLIST" 2>/dev/null || true
 launchctl load -w "$PLIST"
-sleep 2
+launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend" 2>/dev/null || true
+sleep 3
+
+# ── 10b. Verify the running backend is reading the dist we just built ────────
+info "Verifying backend sees the fresh frontend/dist..."
+HEALTH_JSON=""
+for _attempt in 1 2 3 4 5; do
+    HEALTH_JSON=$(curl -fsS --max-time 3 http://127.0.0.1:8765/api/health 2>/dev/null || true)
+    if [[ -n "$HEALTH_JSON" ]]; then break; fi
+    sleep 2
+done
+if [[ -z "$HEALTH_JSON" ]]; then
+    warn "Backend did not respond on :8765 after restart. Check: tail -f ~/Library/Logs/chunkylink.log"
+else
+    SERVED_MTIME=$("$PYTHON" -c "import json,sys; print(json.loads(sys.argv[1]).get('frontend',{}).get('index_html_mtime_unix',''))" "$HEALTH_JSON" 2>/dev/null || echo "")
+    SERVED_GIT=$("$PYTHON" -c "import json,sys; print(json.loads(sys.argv[1]).get('git_head_short',''))" "$HEALTH_JSON" 2>/dev/null || echo "")
+    LOCAL_GIT=$(git -C "$INSTALL_DIR" rev-parse --short HEAD 2>/dev/null || echo "")
+    if [[ "$SERVED_MTIME" == "$DIST_MTIME" ]]; then
+        ok "Backend is serving the freshly built dist (mtime=$SERVED_MTIME, git=$SERVED_GIT)"
+    else
+        warn "STALE: backend reports dist mtime=$SERVED_MTIME but disk mtime=$DIST_MTIME"
+        warn "       served git_head=$SERVED_GIT  local git_head=$LOCAL_GIT"
+        warn "       The LaunchAgent is likely running from a different WorkingDirectory or an old process."
+        warn "       Inspect: launchctl print \"gui/\$(id -u)/com.chunkylink.backend\" | grep -E 'state|cwd|program'"
+    fi
+fi
 
 # ── 11. Summary ───────────────────────────────────────────────────────────────
 MAC_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "unknown")

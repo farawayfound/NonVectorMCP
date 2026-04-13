@@ -50,6 +50,42 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
 INACTIVITY_CLEANUP_MINUTES = 1440  # 24h — lets users step away during long index builds
 
 
+def _frontend_dist_probe(*, include_git: bool = True) -> dict:
+    """Resolved SPA dist path, bundle name, and optional git HEAD for deploy debugging."""
+    repo = Path(__file__).resolve().parent.parent
+    dist_index = repo / "frontend" / "dist" / "index.html"
+    main_js = None
+    if dist_index.is_file():
+        txt = dist_index.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r'src="(/assets/[^"]+\.js)"', txt)
+        if m:
+            main_js = m.group(1)
+    mtime = int(dist_index.stat().st_mtime) if dist_index.is_file() else None
+    git_head = None
+    if include_git:
+        try:
+            import subprocess
+
+            gr = subprocess.run(
+                ["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if gr.returncode == 0:
+                git_head = gr.stdout.strip()
+        except Exception:
+            pass
+    return {
+        "repo_root": str(repo),
+        "process_cwd": str(Path.cwd()),
+        "dist_index_exists": dist_index.is_file(),
+        "dist_index_mtime_unix": mtime,
+        "dist_main_js": main_js,
+        "git_head_short": git_head,
+    }
+
+
 async def _session_cleanup() -> None:
     """Periodically clean up expired sessions and inactive user data.
 
@@ -200,29 +236,8 @@ async def lifespan(app: FastAPI):
         logging.warning("ollama startup warm failed (keepalive will retry): %s", exc)
     # #region agent log
     try:
-        _repo = Path(__file__).resolve().parent.parent
-        _dist_index = _repo / "frontend" / "dist" / "index.html"
-        _main_js = None
-        if _dist_index.is_file():
-            _txt = _dist_index.read_text(encoding="utf-8", errors="replace")
-            _m = re.search(r'src="(/assets/[^"]+\.js)"', _txt)
-            if _m:
-                _main_js = _m.group(1)
-        _mt = int(_dist_index.stat().st_mtime) if _dist_index.is_file() else None
-        _git = None
-        try:
-            import subprocess
-
-            _gr = subprocess.run(
-                ["git", "-C", str(_repo), "rev-parse", "--short", "HEAD"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if _gr.returncode == 0:
-                _git = _gr.stdout.strip()
-        except Exception:
-            pass
+        _probe = _frontend_dist_probe()
+        _repo = Path(_probe["repo_root"])
         _payload = {
             "sessionId": "c921f0",
             "timestamp": int(time.time() * 1000),
@@ -230,18 +245,11 @@ async def lifespan(app: FastAPI):
             "message": "startup dist and git probe",
             "hypothesisId": "H_A_H_B_H_C",
             "runId": "pre-fix",
-            "data": {
-                "repo_root": str(_repo),
-                "process_cwd": str(Path.cwd()),
-                "dist_index_exists": _dist_index.is_file(),
-                "dist_index_mtime_unix": _mt,
-                "dist_main_js": _main_js,
-                "git_head_short": _git,
-            },
+            "data": _probe,
         }
         (_repo / "debug-c921f0.log").open("a", encoding="utf-8").write(json.dumps(_payload) + "\n")
-    except Exception:
-        pass
+    except Exception as _agent_log_err:
+        logging.warning("debug-c921f0.log write failed: %s", _agent_log_err)
     # #endregion
     # Keep the Ollama model warm so first-token latency stays predictable
     keepalive_task = asyncio.create_task(_model_keepalive())
@@ -295,18 +303,28 @@ def create_app() -> FastAPI:
     app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
     app.include_router(library.router, prefix="/api/library", tags=["library"])
 
+    # Resolve git HEAD once at app creation so /api/health is cheap.
+    _startup_probe = _frontend_dist_probe(include_git=True)
+    _startup_git_head = _startup_probe.get("git_head_short")
+
     @app.get("/api/health")
     async def health():
-        """Include SPA bundle hint so you can verify the running process sees a fresh ``frontend/dist``."""
-        out: dict = {"status": "ok", "service": "chunkylink"}
+        """Include SPA bundle hint + git HEAD so you can verify the running process sees a fresh ``frontend/dist``."""
+        out: dict = {
+            "status": "ok",
+            "service": "chunkylink",
+            "git_head_short": _startup_git_head,
+        }
         dist_index = Path(__file__).resolve().parent.parent / "frontend" / "dist" / "index.html"
         if dist_index.is_file():
             m = dist_index.stat().st_mtime
+            probe = _frontend_dist_probe(include_git=False)
             out["frontend"] = {
                 "index_html_mtime_unix": int(m),
                 "index_html_built_at": datetime.fromtimestamp(m, tz=timezone.utc).strftime(
                     "%Y-%m-%dT%H:%M:%SZ"
                 ),
+                "dist_main_js": probe.get("dist_main_js"),
             }
         return out
 
