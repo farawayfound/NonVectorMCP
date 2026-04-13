@@ -18,6 +18,22 @@ if [[ "${EUID:-0}" -ne 0 ]]; then
   exit 1
 fi
 
+# sudo uses a minimal PATH — Docker is often in /usr/local/bin or snap.
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="${PATH}:/snap/bin:/var/lib/snapd/snap/bin"
+
+_nanobot_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    command -v docker
+    return 0
+  fi
+  local c
+  for c in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker; do
+    [[ -x "$c" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 if [[ ! -d "$STAGE/worker" ]]; then
   echo "ERROR: $STAGE/worker not found. Run Sync-NanobotWorker.ps1 from your dev machine first."
   exit 1
@@ -41,10 +57,27 @@ fi
 chown -R chunkylink:chunkylink "${REPO}/worker" "${REPO}/docker/docker-compose.nanobot.yml" \
   "${REPO}/scripts/deploy_nanobot_worker.sh" "${REPO}/.env.nanobot.example" 2>/dev/null || true
 
-echo "==> docker compose up"
+COMPOSE_REL="docker/docker-compose.nanobot.yml"
+DOCKER_BIN="$(_nanobot_docker)" || {
+  echo "ERROR: docker not found. Install Docker Engine on nanobot, e.g.:"
+  echo "  curl -fsSL https://get.docker.com | sudo sh"
+  exit 1
+}
+echo "==> docker compose up (using ${DOCKER_BIN})"
 cd "${REPO}"
-docker compose -f docker/docker-compose.nanobot.yml up -d --build
+if "${DOCKER_BIN}" compose version >/dev/null 2>&1; then
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" up -d --build
+elif command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f "${COMPOSE_REL}" up -d --build
+else
+  echo "ERROR: need 'docker compose' (plugin) or docker-compose v1."
+  exit 1
+fi
 
 echo "==> status"
-docker compose -f docker/docker-compose.nanobot.yml ps
+if "${DOCKER_BIN}" compose version >/dev/null 2>&1; then
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" ps
+elif command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f "${COMPOSE_REL}" ps
+fi
 echo "Done. Ensure ${REPO}/.env.nanobot matches your M1 Redis and API key."

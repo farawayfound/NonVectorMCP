@@ -12,6 +12,21 @@
 #
 set -euo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PATH="${PATH}:/snap/bin:/var/lib/snapd/snap/bin"
+
+_nanobot_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    command -v docker
+    return 0
+  fi
+  local c
+  for c in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker; do
+    [[ -x "$c" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
 REPO="${CHUNKYLINK_REPO:-/srv/chunkylink/repo}"
 COMPOSE_REL="docker/docker-compose.nanobot.yml"
 
@@ -38,9 +53,24 @@ else
   git pull --ff-only
 fi
 
-echo "==> docker compose up (nanobot stack)"
+DOCKER_BIN="$(_nanobot_docker)" || {
+  echo "ERROR: docker not found. Install Docker Engine, e.g.: curl -fsSL https://get.docker.com | sudo sh"
+  exit 1
+}
+echo "==> docker compose up (nanobot stack, ${DOCKER_BIN})"
 cd "${REPO}"
-docker compose -f "${COMPOSE_REL}" up -d --build
+if "${DOCKER_BIN}" compose version >/dev/null 2>&1; then
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" up -d --build
+elif command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f "${COMPOSE_REL}" up -d --build
+else
+  echo "ERROR: need 'docker compose' or docker-compose."
+  exit 1
+fi
 
 echo "==> done"
-docker compose -f "${COMPOSE_REL}" ps
+if "${DOCKER_BIN}" compose version >/dev/null 2>&1; then
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" ps
+elif command -v docker-compose >/dev/null 2>&1; then
+  docker-compose -f "${COMPOSE_REL}" ps
+fi
