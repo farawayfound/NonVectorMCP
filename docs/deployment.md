@@ -182,9 +182,11 @@ If AMA “does nothing” or always errors, build the demo index once: **Admin �
 Quick verification on macOS:
 
 ```bash
-launchctl print "gui/$(id -u)/com.chunkylink.backend" | rg "state =|pid ="
+launchctl print "gui/$(id -u)/com.chunkylink.backend" | grep -E "state =|pid ="
 tail -n 100 ~/Library/Logs/chunkylink.log
 ```
+
+(`grep -E` is built in on macOS. **`rg`** (ripgrep) is optional and not installed by default.)
 
 **Important:** **`git pull` does not update the UI by itself.** The browser loads files from **`frontend/dist/`**, which is gitignored. You must run **`npm run build`** (or **`bash scripts/setup_macmini.sh`**, which runs **`npm ci`** + **`npm run build`**) after pulling, then restart the LaunchAgent.
 
@@ -311,7 +313,9 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`npm run build` → ENOENT `package.json`** | Run from **`~/chunkylink/frontend`**, not the repo root. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
 | **Request Access:** *Email service is not configured* | Set **`SMTP_HOST`** (and related vars) in **`.env`**, restart LaunchAgent. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
 | **Ask Me Anything** broken; Workspace OK | Build **Admin → AMA KB → Build Index**. Check **Ollama**. If behind **Cloudflare**, bypass cache / buffering for **`/api/chat/*`** (SSE). See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
-| Service not active after restart | **`journalctl -u chunkylink -e`** |
+| Service not active after restart | **`journalctl -u chunkylink -e`** (Linux). **Mac mini:** **`launchctl print "gui/$(id -u)/com.chunkylink.backend"`** and **`grep -E "state =|pid ="`** on that output. |
+| **`zsh: command not found: rg`** | The docs use **`grep -E`** for LaunchAgent checks; install **`ripgrep`** (`brew install ripgrep`) only if you prefer **`rg`**. |
+| Log shows **Shutting down** / **Started server process** in a tight loop | Usually repeated **`launchctl kickstart -k`** or deploys. If you are **not** restarting manually, check **Console.app** for signals; **`KeepAlive`** in the plist will respawn after exit. |
 | **Mac mini:** chat still uses **nemotron** after **`setup_macmini.sh`** | **`admin_config.json`** (under **`DATA_DIR`**) stores **`ollama_model`** and overrides **`.env`**. The setup script now rewrites legacy nemotron/llama defaults in both **`.env`** and **`~/chunkylink/data/admin_config.json`**. Restart: **`launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"`**. To pin the stack default on any model: **`CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL=1 bash scripts/setup_macmini.sh`**. |
 
 ## Script reference (repository paths)

@@ -4,11 +4,13 @@ import type { ChatMessage } from "../types";
 
 export type ChatPhase = "idle" | "sending" | "searching" | "thinking" | "answering";
 
-/** Minimum milliseconds each phase must stay visible before transitioning. */
+/** Minimum milliseconds each phase must stay visible before transitioning.
+ *  Kept tiny so a fast warm backend is not artificially gated — just enough
+ *  to prevent the stepper from flashing between stages on instant responses. */
 const PHASE_MIN_MS: Record<ChatPhase, number> = {
   idle: 0,
-  sending: 3888,
-  searching: 1888,
+  sending: 150,
+  searching: 150,
   thinking: 0,
   answering: 0,
 };

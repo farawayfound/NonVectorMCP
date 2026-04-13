@@ -383,9 +383,10 @@ async def generate_stream(
     *kind* is ``"thinking"`` for reasoning-trace tokens or ``"text"`` for
     visible answer tokens.
 
-    ``think: true`` is always sent so Ollama populates the ``thinking``
-    field for models that support structured reasoning.  Three complementary
-    strategies ensure every model works regardless of Ollama version:
+    ``think`` is controlled by ``settings.CHAT_ENABLE_THINKING`` (default
+    off — reasoning adds seconds of hidden prefill+decode before visible
+    text for RAG-style Q&A).  Three complementary strategies still ensure
+    every model works regardless of Ollama version when thinking is on:
 
     1. **Native separation** — the ``thinking`` field from Ollama is yielded
        directly as ``("thinking", ...)``.
@@ -405,11 +406,11 @@ async def generate_stream(
     model = model or settings.OLLAMA_MODEL
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate"
 
-    payload = {
+    payload: dict = {
         "model": model,
         "prompt": prompt,
         "stream": True,
-        "think": True,
+        "think": bool(settings.CHAT_ENABLE_THINKING),
         "keep_alive": -1,
         "options": {
             "temperature": temperature,
@@ -508,11 +509,11 @@ async def chat_stream(
     model = model or settings.OLLAMA_MODEL
     url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
 
-    payload = {
+    payload: dict = {
         "model": model,
         "messages": messages,
         "stream": True,
-        "think": True,
+        "think": bool(settings.CHAT_ENABLE_THINKING),
         "keep_alive": -1,
         "options": {
             "temperature": temperature,

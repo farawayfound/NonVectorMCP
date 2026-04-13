@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """ChunkyPotato — FastAPI application entry point."""
 import asyncio
+import json
 import logging
+import re
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -196,6 +198,51 @@ async def lifespan(app: FastAPI):
         log_event("ollama_startup_warm", model=settings.OLLAMA_MODEL)
     except Exception as exc:
         logging.warning("ollama startup warm failed (keepalive will retry): %s", exc)
+    # #region agent log
+    try:
+        _repo = Path(__file__).resolve().parent.parent
+        _dist_index = _repo / "frontend" / "dist" / "index.html"
+        _main_js = None
+        if _dist_index.is_file():
+            _txt = _dist_index.read_text(encoding="utf-8", errors="replace")
+            _m = re.search(r'src="(/assets/[^"]+\.js)"', _txt)
+            if _m:
+                _main_js = _m.group(1)
+        _mt = int(_dist_index.stat().st_mtime) if _dist_index.is_file() else None
+        _git = None
+        try:
+            import subprocess
+
+            _gr = subprocess.run(
+                ["git", "-C", str(_repo), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if _gr.returncode == 0:
+                _git = _gr.stdout.strip()
+        except Exception:
+            pass
+        _payload = {
+            "sessionId": "c921f0",
+            "timestamp": int(time.time() * 1000),
+            "location": "main.py:lifespan",
+            "message": "startup dist and git probe",
+            "hypothesisId": "H_A_H_B_H_C",
+            "runId": "pre-fix",
+            "data": {
+                "repo_root": str(_repo),
+                "process_cwd": str(Path.cwd()),
+                "dist_index_exists": _dist_index.is_file(),
+                "dist_index_mtime_unix": _mt,
+                "dist_main_js": _main_js,
+                "git_head_short": _git,
+            },
+        }
+        (_repo / "debug-c921f0.log").open("a", encoding="utf-8").write(json.dumps(_payload) + "\n")
+    except Exception:
+        pass
+    # #endregion
     # Keep the Ollama model warm so first-token latency stays predictable
     keepalive_task = asyncio.create_task(_model_keepalive())
     # Periodically clean up expired/inactive sessions and their user data

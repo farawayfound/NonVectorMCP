@@ -131,6 +131,19 @@ def _run_demo_index():
         except Exception as e:
             logging.warning(f"Suggestion generation failed (non-fatal): {e}")
 
+        # Suggestion generation pins SUGGESTION_MODEL (lfm2:24b-a2b) with
+        # keep_alive=-1, which evicts the main chat model from Ollama memory.
+        # The 4-minute keepalive loop would eventually rewarm it, but until
+        # then the next AMA/Workspace query pays a cold-load penalty. Restore
+        # warmth immediately so the first post-index-build chat is fast.
+        try:
+            import asyncio
+            from backend.chat.ollama_client import ensure_single_model_loaded
+            asyncio.run(ensure_single_model_loaded(get_settings().OLLAMA_MODEL))
+            log_event("ollama_rewarmed_after_suggestions")
+        except Exception as e:
+            logging.warning(f"rewarm after suggestion generation failed: {e}")
+
         # Phase 5: Merge curated questions into suggestions
         qa_items = _read_qa()
         if qa_items:
