@@ -269,7 +269,11 @@ def create_app() -> FastAPI:
                 },
             )
 
-        @app.get("/{full_path:path}", include_in_schema=False)
+        @app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+        async def spa_root():
+            return serve_index()
+
+        @app.api_route("/{full_path:path}", methods=["GET", "HEAD"], include_in_schema=False)
         async def spa_fallback(full_path: str):
             # Serve real files that exist (favicon, robots.txt, etc.)
             candidate = dist / full_path
