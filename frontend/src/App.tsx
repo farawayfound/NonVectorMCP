@@ -4,7 +4,7 @@ import { Layout } from "./components/Layout";
 import { AuthGuard } from "./components/AuthGuard";
 import { Login } from "./pages/Login";
 import { AskMeAnything } from "./pages/AskMeAnything";
-import { YourDocuments } from "./pages/YourDocuments";
+import { Workspace } from "./pages/Workspace";
 import { AdminPanel } from "./pages/AdminPanel";
 import { About } from "./pages/About";
 import { MyResume } from "./pages/MyResume";
@@ -28,13 +28,14 @@ export default function App() {
             }
           />
           <Route
-            path="/documents"
+            path="/workspace"
             element={
               <AuthGuard user={user} loading={loading}>
-                <YourDocuments />
+                <Workspace />
               </AuthGuard>
             }
           />
+          <Route path="/documents" element={<Navigate to="/workspace" replace />} />
           <Route
             path="/admin"
             element={

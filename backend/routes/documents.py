@@ -195,6 +195,119 @@ async def get_preserve(request: Request, user: dict = Depends(require_auth)):
         await db.close()
 
 
+@router.get("/insights/{doc_id:path}")
+async def get_document_insights(
+    doc_id: str,
+    request: Request,
+    refresh: bool = False,
+    user: dict = Depends(require_auth),
+):
+    """Return cached insights for a single document (builds on demand if missing)."""
+    from backend.services.insights_service import (
+        load_cached_insights, build_insights as build_one,
+    )
+    if not refresh:
+        cached = load_cached_insights(user["user_id"], doc_id)
+        if cached is not None:
+            return cached
+    return await build_one(user["user_id"], doc_id, force=refresh)
+
+
+@router.get("/chunks")
+async def list_chunks(
+    request: Request,
+    doc_id: str | None = None,
+    category: str | None = None,
+    tag: str | None = None,
+    entity: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    user: dict = Depends(require_auth),
+):
+    """Faceted search over the authenticated user's indexed chunks."""
+    from collections import Counter
+    from backend.services.insights_service import _iter_chunks  # noqa: WPS437
+
+    index_dir = get_user_index_dir(user["user_id"])
+    detail_dir = index_dir / "detail"
+    if not detail_dir.exists():
+        return {"chunks": [], "facets": {}, "total": 0}
+
+    limit = max(1, min(limit, 200))
+    offset = max(0, offset)
+    q_lower = (q or "").strip().lower() or None
+
+    cats: Counter = Counter()
+    tag_counter: Counter = Counter()
+    entity_counter: Counter = Counter()
+    docs: Counter = Counter()
+
+    results: list[dict] = []
+    total = 0
+
+    for chunk in _iter_chunks(detail_dir):
+        meta = chunk.get("metadata") or {}
+        chunk_doc = meta.get("doc_id") or ""
+        chunk_cat = meta.get("nlp_category") or "general"
+        chunk_tags = [t for t in (chunk.get("tags") or []) if isinstance(t, str)]
+        ents_raw = meta.get("nlp_entities") or []
+        chunk_entities = []
+        for e in ents_raw:
+            if isinstance(e, dict):
+                txt = e.get("text") or e.get("value")
+                if txt:
+                    chunk_entities.append(txt)
+            elif isinstance(e, str):
+                chunk_entities.append(e)
+
+        if doc_id and chunk_doc != doc_id:
+            continue
+        if category and chunk_cat != category:
+            continue
+        if tag and tag not in chunk_tags:
+            continue
+        if entity and entity not in chunk_entities:
+            continue
+        if q_lower:
+            text_blob = (chunk.get("text_raw") or chunk.get("text") or "").lower()
+            if q_lower not in text_blob:
+                continue
+
+        total += 1
+        cats[chunk_cat] += 1
+        docs[chunk_doc] += 1
+        for t in chunk_tags:
+            tag_counter[t] += 1
+        for e in chunk_entities:
+            entity_counter[e] += 1
+
+        if offset <= total - 1 < offset + limit:
+            results.append({
+                "id": chunk.get("id"),
+                "doc_id": chunk_doc,
+                "category": chunk_cat,
+                "tags": chunk_tags,
+                "breadcrumb": meta.get("breadcrumb"),
+                "page_start": meta.get("page_start"),
+                "page_end": meta.get("page_end"),
+                "text": chunk.get("text_raw") or chunk.get("text") or "",
+                "entities": chunk_entities[:10],
+                "related_chunks": chunk.get("related_chunks") or [],
+            })
+
+    return {
+        "chunks": results,
+        "total": total,
+        "facets": {
+            "categories": dict(cats.most_common()),
+            "tags": dict(tag_counter.most_common(30)),
+            "entities": dict(entity_counter.most_common(30)),
+            "documents": dict(docs.most_common()),
+        },
+    }
+
+
 @router.put("/preserve")
 async def set_preserve(request: Request, user: dict = Depends(require_auth)):
     """Set the user's data preservation preference."""

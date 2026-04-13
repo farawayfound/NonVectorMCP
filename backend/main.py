@@ -45,7 +45,7 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             raise
 
 
-INACTIVITY_CLEANUP_MINUTES = 20
+INACTIVITY_CLEANUP_MINUTES = 1440  # 24h — lets users step away during long index builds
 
 
 async def _session_cleanup() -> None:

@@ -16,7 +16,7 @@ export function Layout({ user, onLogout, children }: Props) {
   const navItems = [
     { path: "/resume", label: "My Resume" },
     { path: "/", label: "Ask Me Anything" },
-    ...(user ? [{ path: "/documents", label: "Your Documents" }] : []),
+    ...(user ? [{ path: "/workspace", label: "Workspace" }] : []),
     { path: "/about", label: "About" },
     ...(user?.role === "admin" ? [{ path: "/admin", label: "Admin" }] : []),
   ];

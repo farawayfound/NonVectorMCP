@@ -57,3 +57,89 @@ async def send_invite_email(to_email: str, invite_code: str) -> bool:
     except Exception:
         logging.error("email: failed to send to %s", to_email, exc_info=True)
         return False
+
+
+async def send_index_complete_email(
+    to_email: str,
+    doc_count: int,
+    chunk_count: int,
+    insights_generated: bool,
+    failed: bool = False,
+    error: str | None = None,
+) -> bool:
+    """Notify a user that their index build has finished."""
+    settings = get_settings()
+
+    if not settings.SMTP_HOST:
+        logging.warning("email: SMTP not configured — skipping index-complete send to %s", to_email)
+        return False
+
+    msg = EmailMessage()
+    if failed:
+        msg["Subject"] = "ChunkyPotato — index build failed"
+    else:
+        msg["Subject"] = "ChunkyPotato has finished baking their index"
+    msg["From"] = settings.SMTP_FROM or settings.SMTP_USER
+    msg["To"] = to_email
+
+    if failed:
+        body_text = (
+            f"Hi,\n\n"
+            f"Unfortunately your index build did not complete successfully.\n\n"
+            f"Error: {error or 'unknown'}\n\n"
+            f"You can log back in and try again.\n\n"
+            f"— ChunkyPotato"
+        )
+        body_html = f"""<html><body style="font-family: -apple-system, sans-serif; color: #e4e6ed; background: #0f1117; padding: 40px;">
+        <div style="max-width: 480px; margin: 0 auto; background: #1a1d27; border: 1px solid #2a2e3d; border-radius: 12px; padding: 40px;">
+            <h2 style="color: #ef4444; margin-top: 0;">Index build failed</h2>
+            <p style="color: #8b8fa3;">Your index build did not complete.</p>
+            <pre style="background: #0f1117; border: 1px solid #2a2e3d; border-radius: 8px; padding: 16px; color: #e4e6ed; font-size: 13px; white-space: pre-wrap;">{error or 'unknown error'}</pre>
+            <p style="color: #8b8fa3;">Log back in and try again.</p>
+        </div>
+        </body></html>"""
+    else:
+        insights_line = (
+            "Insights were generated for each document."
+            if insights_generated
+            else "Insights generation was skipped for this run."
+        )
+        body_text = (
+            f"Hi,\n\n"
+            f"Your ChunkyPotato index has finished baking!\n\n"
+            f"  • Documents indexed: {doc_count}\n"
+            f"  • Chunks created: {chunk_count}\n"
+            f"  • {insights_line}\n\n"
+            f"Log back in to start asking questions about your documents.\n\n"
+            f"— ChunkyPotato"
+        )
+        body_html = f"""<html><body style="font-family: -apple-system, sans-serif; color: #e4e6ed; background: #0f1117; padding: 40px;">
+        <div style="max-width: 480px; margin: 0 auto; background: #1a1d27; border: 1px solid #2a2e3d; border-radius: 12px; padding: 40px;">
+            <h2 style="color: #6366f1; margin-top: 0;">Your index is ready</h2>
+            <p style="color: #8b8fa3;">ChunkyPotato has finished baking their index.</p>
+            <div style="background: #0f1117; border: 1px solid #2a2e3d; border-radius: 8px; padding: 20px; margin: 24px 0; color: #e4e6ed;">
+                <p style="margin: 4px 0;"><strong>Documents indexed:</strong> {doc_count}</p>
+                <p style="margin: 4px 0;"><strong>Chunks created:</strong> {chunk_count}</p>
+                <p style="margin: 4px 0;">{insights_line}</p>
+            </div>
+            <p style="color: #8b8fa3;">Log back in to start asking questions about your documents.</p>
+        </div>
+        </body></html>"""
+
+    msg.set_content(body_text)
+    msg.add_alternative(body_html, subtype="html")
+
+    try:
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.SMTP_HOST,
+            port=settings.SMTP_PORT,
+            username=settings.SMTP_USER or None,
+            password=settings.SMTP_PASSWORD or None,
+            start_tls=settings.SMTP_USE_TLS,
+        )
+        logging.info("email: index-complete sent to %s (failed=%s)", to_email, failed)
+        return True
+    except Exception:
+        logging.error("email: failed to send index-complete to %s", to_email, exc_info=True)
+        return False

@@ -5,6 +5,7 @@ import {
   deleteDocument,
   getDocumentStats,
   buildIndex,
+  type BuildIndexOptions,
   getIndexStatus,
   getChunkingConfig,
   updateChunkingConfig,
@@ -63,9 +64,10 @@ export function useDocuments() {
     [refresh],
   );
 
-  const startIndex = useCallback(async () => {
-    await buildIndex();
+  const startIndex = useCallback(async (opts: BuildIndexOptions = {}) => {
+    const result = await buildIndex(opts);
     await refreshIndex();
+    return result;
   }, []);
 
   const refreshIndex = useCallback(async () => {

@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url TEXT,
     role TEXT NOT NULL DEFAULT 'recruiter',
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
-    last_seen TEXT
+    last_seen TEXT,
+    email TEXT
 );
 
 CREATE TABLE IF NOT EXISTS invite_codes (
@@ -115,6 +116,9 @@ def _migrate(conn: sqlite3.Connection) -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_perf_ts ON chat_perf_log(timestamp);
         """)
+    user_cols = {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+    if "email" not in user_cols:
+        conn.execute("ALTER TABLE users ADD COLUMN email TEXT")
     if "access_requests" not in existing:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS access_requests (

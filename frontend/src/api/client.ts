@@ -105,9 +105,16 @@ export async function uploadDocument(file: File): Promise<any> {
 }
 
 // Index
-export const buildIndex = () => request<any>("/index/build", { method: "POST" });
+export interface BuildIndexOptions {
+  generate_insights?: boolean;
+  notify_email?: string;
+}
+export const buildIndex = (opts: BuildIndexOptions = {}) =>
+  request<any>("/index/build", { method: "POST", body: JSON.stringify(opts) });
 export const getIndexStatus = () => request<any>("/index/status");
 export const getIndexStats = () => request<any>("/index/stats");
+export const getIndexEmailStatus = () =>
+  request<{ has_email: boolean; email: string }>("/index/email-status");
 
 // Chunking config
 export const getChunkingConfig = () => request<any>("/documents/config");
@@ -125,6 +132,29 @@ export const updateAgentConfig = (body: Record<string, unknown>) =>
 // Delete all user documents and indexes
 export const deleteAllDocuments = () =>
   request<any>("/documents/all", { method: "DELETE" });
+
+// Workspace — Insights
+export const getDocumentInsights = (docId: string, refresh = false) =>
+  request<any>(`/documents/insights/${encodeURIComponent(docId)}${refresh ? "?refresh=true" : ""}`);
+
+// Workspace — Chunk Explorer
+export interface ChunkQuery {
+  doc_id?: string;
+  category?: string;
+  tag?: string;
+  entity?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+export const listChunks = (params: ChunkQuery = {}) => {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return request<any>(`/documents/chunks${suffix}`);
+};
 
 // Preserve data preference
 export const getPreserveFlag = () => request<any>("/documents/preserve");
