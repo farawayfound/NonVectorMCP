@@ -147,7 +147,37 @@ cd ~/chunkylink/frontend && npm run build
 launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"
 ```
 
+**`npm run build` must run inside `frontend/`.** There is **no** `package.json` at the repo root (`~/chunkylink`). If you see **`ENOENT: Could not read package.json`** you ran npm from the wrong directory — **`cd ~/chunkylink/frontend`** first (or use **`bash scripts/setup_macmini.sh`**, which **`cd`**s there for you).
+
 A plain **`cd frontend && npm run build`** from the repo root is equivalent; the important part is running **`npm run build`** inside **`frontend/`** so **`dist/`** matches the current **`src/`**.
+
+#### Request Access — "Email service is not configured"
+
+The login page **Request Access** flow calls **`POST /api/auth/request-access`**, which sends an invite code by email. That requires **SMTP** in **`~/chunkylink/.env`**:
+
+- **`SMTP_HOST`** (required — if empty, the API returns that error)
+- **`SMTP_PORT`** (e.g. **587**)
+- **`SMTP_USER`** / **`SMTP_PASSWORD`**
+- **`SMTP_FROM`** (optional; often same as **`SMTP_USER`**)
+- **`SMTP_USE_TLS`** (usually **`true`** for port 587)
+
+Copy the block from **`.env.example`**, fill in a real relay (Gmail app password, Mailgun, SendGrid SMTP, etc.), then restart:
+
+```bash
+launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"
+```
+
+#### Ask Me Anything vs Workspace / Library
+
+| Feature | What it needs |
+|---------|----------------|
+| **Workspace** (document chat) | Your **uploaded** docs and **user** index under **`DATA_DIR`**. |
+| **Library** | **Redis** (**`REDIS_URL`**) and the **nanobot** worker; separate from AMA. |
+| **Ask Me Anything** | The **demo** index only: **`$DATA_DIR/indexes/demo`** (default **`~/chunkylink/data/indexes/demo`**). It does **not** use your Workspace uploads. |
+
+If AMA “does nothing” or always errors, build the demo index once: **Admin → AMA KB (Demo KB) → Build Index**. Confirm Ollama is running (**`brew services list`**, **`ollama list`**) and matches **`OLLAMA_MODEL`** in **`.env`**.
+
+**Cloudflare in front of the Mac:** **AMA** streams responses over **SSE** (**`POST /api/chat/ask`**). Proxies sometimes **buffer** event streams, which breaks the chat UI. Add a **Cache / configuration rule** to **bypass** caching (and avoid buffering) for **`/api/chat/*`** (or at least **`/api/chat/ask`**). Symptoms can include a stuck “thinking” state or no answer while Workspace (different route) still appears fine.
 
 Quick verification on macOS:
 
@@ -278,6 +308,9 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
 | **Mac mini:** UI unstyled or clearly old after pull | **`git pull` alone does not refresh `dist/`** — run **`npm run build`** or **`bash scripts/setup_macmini.sh`**, then restart the agent. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
 | **Mac mini:** UI stuck on old version despite rebuild + Incognito | Compare **`stat …/frontend/dist/index.html`** with **`curl http://127.0.0.1:8765/api/health`** → **`frontend.index_html_built_at`**. Mismatch → wrong **WorkingDirectory** or stale process. If they match, fix **Cloudflare / CDN HTML caching** (subsection *Stale UI after deploy* under [§ 2a](#2a-deploy-on-davidmacmini-launchagent)). |
+| **`npm run build` → ENOENT `package.json`** | Run from **`~/chunkylink/frontend`**, not the repo root. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
+| **Request Access:** *Email service is not configured* | Set **`SMTP_HOST`** (and related vars) in **`.env`**, restart LaunchAgent. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
+| **Ask Me Anything** broken; Workspace OK | Build **Admin → AMA KB → Build Index**. Check **Ollama**. If behind **Cloudflare**, bypass cache / buffering for **`/api/chat/*`** (SSE). See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |
 | **Mac mini:** chat still uses **nemotron** after **`setup_macmini.sh`** | **`admin_config.json`** (under **`DATA_DIR`**) stores **`ollama_model`** and overrides **`.env`**. The setup script now rewrites legacy nemotron/llama defaults in both **`.env`** and **`~/chunkylink/data/admin_config.json`**. Restart: **`launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"`**. To pin the stack default on any model: **`CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL=1 bash scripts/setup_macmini.sh`**. |
 
