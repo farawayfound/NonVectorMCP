@@ -151,6 +151,16 @@ async def reject_task(task_id: str, user: dict = Depends(require_auth)):
     return result
 
 
+@router.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str, user: dict = Depends(require_auth)):
+    try:
+        result = await service.cancel_task(user["user_id"], task_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    log_event("library_cancel", user_id=user["user_id"], task_id=task_id)
+    return result
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str, user: dict = Depends(require_auth)):
     try:

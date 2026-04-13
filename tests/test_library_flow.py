@@ -145,6 +145,21 @@ async def test_approve_writes_upload_and_marks_approved(library_env):
 
 
 @pytest.mark.asyncio
+async def test_cancel_task_owner_marks_cancelled(library_env):
+    res = await library_service.submit_research(
+        user_id="u-test",
+        prompt="Topic for owner cancel test.",
+    )
+    job_id = res["job_id"]
+    out = await library_service.cancel_task("u-test", job_id)
+    assert out["status"] == TaskStatus.CANCELLED
+
+    task = await library_service.get_task("u-test", job_id)
+    assert task is not None
+    assert task["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
 async def test_cancel_task_by_id_marks_cancelled(library_env):
     res = await library_service.submit_research(
         user_id="u-test",

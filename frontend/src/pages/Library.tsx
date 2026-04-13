@@ -30,10 +30,14 @@ function isActive(status: string) {
   return ["queued", "crawling", "synthesizing"].includes(status);
 }
 
+function canUserCancelTask(status: string) {
+  return !["approved", "rejected", "cancelled"].includes(status);
+}
+
 export function Library() {
   const {
     tasks, loading, submitting, error,
-    refresh, submit, approve, reject, remove,
+    refresh, submit, approve, reject, remove, cancelSelected,
   } = useLibrary();
 
   const [view, setView] = useState<View>("list");
@@ -53,7 +57,17 @@ export function Library() {
   const [confirmSubmitting, setConfirmSubmitting] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
+  const [selectedForCancel, setSelectedForCancel] = useState<Set<string>>(() => new Set());
+  const [cancellingBulk, setCancellingBulk] = useState(false);
+
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    const allowed = new Set(
+      tasks.filter((t) => canUserCancelTask(t.status)).map((t) => t.id),
+    );
+    setSelectedForCancel((prev) => new Set([...prev].filter((id) => allowed.has(id))));
+  }, [tasks]);
 
   const displayError = localError || error;
 
@@ -136,6 +150,43 @@ export function Library() {
     if (selectedId === id) setView("list");
   }, [remove, selectedId]);
 
+  const toggleSelectCancel = useCallback((id: string) => {
+    if (!canUserCancelTask(tasks.find((x) => x.id === id)?.status ?? "")) return;
+    setSelectedForCancel((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, [tasks]);
+
+  const handleCancelSelected = useCallback(async () => {
+    const ids = [...selectedForCancel];
+    if (ids.length === 0 || cancellingBulk) return;
+    setCancellingBulk(true);
+    setLocalError(null);
+    try {
+      await cancelSelected(ids);
+      setSelectedForCancel(new Set());
+    } finally {
+      setCancellingBulk(false);
+    }
+  }, [selectedForCancel, cancellingBulk, cancelSelected]);
+
+  const cancellableCount = tasks.filter((t) => canUserCancelTask(t.status)).length;
+  const allCancellableSelected =
+    cancellableCount > 0 &&
+    tasks.filter((t) => canUserCancelTask(t.status)).every((t) => selectedForCancel.has(t.id));
+
+  const toggleSelectAllCancellable = useCallback(() => {
+    const cancellable = tasks.filter((t) => canUserCancelTask(t.status));
+    if (allCancellableSelected) {
+      setSelectedForCancel(new Set());
+    } else {
+      setSelectedForCancel(new Set(cancellable.map((t) => t.id)));
+    }
+  }, [tasks, allCancellableSelected]);
+
   // ── List view ──
 
   if (view === "list") {
@@ -194,6 +245,31 @@ export function Library() {
         {displayError && <div className="library-error">{displayError}</div>}
 
         <div className="library-task-list">
+          {tasks.length > 0 && (
+            <div className="library-bulk-row">
+              {cancellableCount > 0 && (
+                <label className="library-select-all">
+                  <input
+                    type="checkbox"
+                    checked={allCancellableSelected}
+                    onChange={toggleSelectAllCancellable}
+                    aria-label="Select all tasks that can be cancelled"
+                  />
+                  <span>Select all</span>
+                </label>
+              )}
+              <button
+                type="button"
+                className="btn btn-sm btn-danger"
+                disabled={selectedForCancel.size === 0 || cancellingBulk}
+                onClick={handleCancelSelected}
+              >
+                {cancellingBulk
+                  ? "Cancelling…"
+                  : `Cancel selected${selectedForCancel.size > 0 ? ` (${selectedForCancel.size})` : ""}`}
+              </button>
+            </div>
+          )}
           {loading && tasks.length === 0 && (
             <p className="library-empty">Loading tasks...</p>
           )}
@@ -202,6 +278,22 @@ export function Library() {
           )}
           {tasks.map((t) => (
             <div key={t.id} className="library-task-card" onClick={() => openDetail(t.id)}>
+              <label
+                className="library-task-checkbox-wrap"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!canUserCancelTask(t.status)}
+                  checked={canUserCancelTask(t.status) && selectedForCancel.has(t.id)}
+                  onChange={() => toggleSelectCancel(t.id)}
+                  aria-label={
+                    canUserCancelTask(t.status)
+                      ? "Select for cancel"
+                      : "Cannot cancel this task"
+                  }
+                />
+              </label>
               <div className="library-task-info">
                 <span className="library-task-prompt">{t.prompt}</span>
                 <span className="library-task-meta">

@@ -5,6 +5,7 @@ import {
   submitResearch,
   approveLibraryTask,
   rejectLibraryTask,
+  cancelLibraryTask,
   deleteLibraryTask,
   subscribeTaskStatus,
 } from "../api/client";
@@ -95,6 +96,22 @@ export function useLibrary() {
     }
   }, [refresh]);
 
+  const cancelSelected = useCallback(async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setError(null);
+    const results = await Promise.allSettled(ids.map((id) => cancelLibraryTask(id)));
+    const failed = results.filter((r) => r.status === "rejected");
+    await refresh();
+    if (failed.length > 0) {
+      const first = failed[0] as PromiseRejectedResult;
+      const msg =
+        failed.length === ids.length
+          ? first.reason?.message || "Could not cancel tasks"
+          : `${failed.length} of ${ids.length} tasks could not be cancelled`;
+      setError(msg);
+    }
+  }, [refresh]);
+
   const subscribe = useCallback((taskId: string) => {
     if (cleanupRefs.current.has(taskId)) return;
 
@@ -144,5 +161,6 @@ export function useLibrary() {
     approve,
     reject,
     remove,
+    cancelSelected,
   };
 }

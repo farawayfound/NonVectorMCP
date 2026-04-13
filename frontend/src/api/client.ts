@@ -289,6 +289,8 @@ export const approveLibraryTask = (id: string) =>
   request<any>(`/library/tasks/${id}/approve`, { method: "POST" });
 export const rejectLibraryTask = (id: string) =>
   request<any>(`/library/tasks/${id}/reject`, { method: "POST" });
+export const cancelLibraryTask = (id: string) =>
+  request<any>(`/library/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" });
 export const deleteLibraryTask = (id: string) =>
   request<any>(`/library/tasks/${id}`, { method: "DELETE" });
 
