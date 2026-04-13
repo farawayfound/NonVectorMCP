@@ -3,23 +3,34 @@
 
 Design: the abstract base lets us swap Redis for RabbitMQ (or any other
 transport) by implementing a new subclass — no call-site changes required.
+
+The redis import is deferred so that importing this module never crashes the
+backend when the redis package isn't installed or available — the feature
+simply degrades at runtime.
 """
 from __future__ import annotations
 
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import AsyncIterator
-
-import redis.asyncio as aioredis
+from typing import AsyncIterator, TYPE_CHECKING
 
 from backend.library.models import ResearchJob, StatusUpdate
+
+if TYPE_CHECKING:
+    import redis.asyncio as aioredis
 
 _STREAM_JOBS = "library:jobs"
 _STREAM_STATUS_PREFIX = "library:status:"
 _GROUP = "workers"
 
 log = logging.getLogger(__name__)
+
+
+def _import_redis():
+    """Lazy import — keeps the module loadable even when redis isn't installed."""
+    import redis.asyncio as _aioredis
+    return _aioredis
 
 
 # ---------------------------------------------------------------------------
@@ -76,10 +87,11 @@ class RedisQueue(QueueBackend):
         self._redis: aioredis.Redis | None = None
 
     async def connect(self) -> None:
-        self._redis = aioredis.from_url(self._url, decode_responses=True)
+        _aioredis = _import_redis()
+        self._redis = _aioredis.from_url(self._url, decode_responses=True)
         try:
             await self._redis.xgroup_create(_STREAM_JOBS, _GROUP, id="0", mkstream=True)
-        except aioredis.ResponseError as e:
+        except _aioredis.ResponseError as e:
             if "BUSYGROUP" not in str(e):
                 raise
         log.info("redis queue connected to %s", self._url)

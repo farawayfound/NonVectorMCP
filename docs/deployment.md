@@ -132,6 +132,15 @@ cd ~/chunkylink
 bash scripts/setup_macmini.sh
 ```
 
+**Frontend build only (Mac mini):** Uvicorn serves **`frontend/dist/`** when that folder exists. If the UI looks unstyled, outdated, or wrong after a **`git pull`**, rebuild the bundle on the Mac mini (Node / npm required), then restart the backend:
+
+```bash
+cd ~/chunkylink/frontend && npm run build
+launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"
+```
+
+A plain **`cd frontend && npm run build`** from the repo root is equivalent; the important part is running **`npm run build`** inside **`frontend/`** so **`dist/`** matches the current **`src/`**.
+
 Quick verification on macOS:
 
 ```bash
@@ -214,6 +223,7 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 | **`fatal: not a git repository`** from **`~`** | Run Git with **`sudo git -C /srv/chunkylink/repo …`** (or **`cd`** there first). Your home directory is not the repo. |
 | **`git pull --ff-only` failed** / “local changes would be overwritten” | Uncommitted edits or diverged history. If **GitHub** should win: **`sudo DEPLOY_RESET_HARD=1 bash …/deploy_chunkylink.sh`** or **`sudo git -C /srv/chunkylink/repo fetch origin && sudo git -C /srv/chunkylink/repo reset --hard origin/main`**. |
 | Frontend build skipped | Install **nvm** + Node under the sudo-ing user, or set **`DEPLOY_SKIP_NPM=1`** and supply **`frontend/dist`** another way. |
+| **Mac mini:** UI unstyled or clearly old after pull | Rebuild: **`cd ~/chunkylink/frontend && npm run build`**, then **`launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"`**. See [§ 2a](#2a-deploy-on-davidmacmini-launchagent). |
 | Service not active after restart | **`journalctl -u chunkylink -e`** |
 | **Mac mini:** chat still uses **nemotron** after **`setup_macmini.sh`** | **`admin_config.json`** (under **`DATA_DIR`**) stores **`ollama_model`** and overrides **`.env`**. The setup script now rewrites legacy nemotron/llama defaults in both **`.env`** and **`~/chunkylink/data/admin_config.json`**. Restart: **`launchctl kickstart -k "gui/$(id -u)/com.chunkylink.backend"`**. To pin the stack default on any model: **`CHUNKYLINK_FORCE_DEFAULT_OLLAMA_MODEL=1 bash scripts/setup_macmini.sh`**. |
 

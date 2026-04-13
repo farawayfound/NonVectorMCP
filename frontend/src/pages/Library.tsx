@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useLibrary, type LibraryTask } from "../hooks/useLibrary";
 import { getLibraryTask, getIndexEmailStatus } from "../api/client";
 
