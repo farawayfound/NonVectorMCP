@@ -20,6 +20,9 @@ class TaskStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+OUTPUT_FORMATS = ("default", "essay", "graphical", "contrast", "correlate")
+
+
 @dataclass
 class ResearchJob:
     """Serializable job payload pushed onto the queue."""
@@ -29,6 +32,8 @@ class ResearchJob:
     max_sources: int = 10
     focus_keywords: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    target_tokens: int = 1500
+    output_format: str = "default"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -38,10 +43,15 @@ class ResearchJob:
             "max_sources": self.max_sources,
             "focus_keywords": self.focus_keywords,
             "created_at": self.created_at,
+            "target_tokens": self.target_tokens,
+            "output_format": self.output_format,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> ResearchJob:
+        fmt = (data.get("output_format") or "default").strip().lower()
+        if fmt not in OUTPUT_FORMATS:
+            fmt = "default"
         return cls(
             job_id=data["job_id"],
             user_id=data["user_id"],
@@ -49,6 +59,8 @@ class ResearchJob:
             max_sources=int(data.get("max_sources", 10)),
             focus_keywords=data.get("focus_keywords") or [],
             created_at=data.get("created_at", ""),
+            target_tokens=int(data.get("target_tokens", 1500)),
+            output_format=fmt,
         )
 
 

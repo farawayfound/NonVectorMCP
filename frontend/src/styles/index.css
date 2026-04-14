@@ -1759,15 +1759,113 @@ button.chip:hover { border-color: var(--primary); }
 .library-detail-artifact h4 { font-size: 14px; margin-bottom: 8px; }
 .library-artifact-content {
   max-height: 500px;
+  overflow-x: auto;
   overflow-y: auto;
 }
-.library-artifact-content pre {
-  white-space: pre-wrap;
-  word-break: break-word;
+.library-artifact-markdown {
   font-size: 14px;
-  line-height: 1.7;
+  line-height: 1.65;
   color: var(--text);
-  font-family: var(--font);
+}
+.library-artifact-markdown > *:first-child {
+  margin-top: 0;
+}
+.library-artifact-markdown > *:last-child {
+  margin-bottom: 0;
+}
+.library-artifact-markdown h1,
+.library-artifact-markdown h2,
+.library-artifact-markdown h3,
+.library-artifact-markdown h4 {
+  margin: 1.1em 0 0.45em;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+}
+.library-artifact-markdown h1 { font-size: 1.35rem; }
+.library-artifact-markdown h2 { font-size: 1.2rem; }
+.library-artifact-markdown h3 { font-size: 1.08rem; }
+.library-artifact-markdown h4 { font-size: 1rem; }
+.library-artifact-markdown p {
+  margin: 0.55em 0;
+}
+.library-artifact-markdown ul,
+.library-artifact-markdown ol {
+  margin: 0.55em 0;
+  padding-left: 1.35em;
+}
+.library-artifact-markdown li {
+  margin: 0.25em 0;
+}
+.library-artifact-markdown blockquote {
+  margin: 0.75em 0;
+  padding: 0.35em 0 0.35em 0.85em;
+  border-left: 3px solid var(--primary);
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: 0 6px 6px 0;
+}
+.library-artifact-markdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25em 0;
+}
+.library-artifact-markdown a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.library-artifact-markdown a:hover {
+  text-decoration: underline;
+}
+.library-artifact-markdown code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.library-artifact-markdown pre {
+  margin: 0.75em 0;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.library-artifact-markdown pre code {
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: inherit;
+}
+.library-artifact-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.85em 0;
+  font-size: 13px;
+}
+.library-artifact-markdown th,
+.library-artifact-markdown td {
+  border: 1px solid var(--border);
+  padding: 0.45em 0.65em;
+  text-align: left;
+  vertical-align: top;
+}
+.library-artifact-markdown th {
+  font-weight: 600;
+  background: var(--bg);
+  color: var(--text);
+}
+.library-artifact-markdown tbody tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.035);
+}
+.library-artifact-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
 }
 
 .library-review-actions {

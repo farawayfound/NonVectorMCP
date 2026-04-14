@@ -1,14 +1,8 @@
 # -*- coding: utf-8 -*-
 """System prompts and templates for the synthesis pipeline."""
 
-SYNTHESIS_SYSTEM = """\
-You are a research assistant that produces well-structured Markdown reports.
-Given a set of web sources and their extracted content, synthesize the
-information into a single, comprehensive, factual document.
-
-Rules:
+_BASE_RULES = """\
 - Write in clear, professional prose.
-- Use Markdown headings (##, ###) to organise sections.
 - Include inline citations like [Source 1], [Source 2] referencing the
   numbered source list provided.
 - If sources conflict, note the discrepancy.
@@ -16,16 +10,100 @@ Rules:
 - End with a "## Sources" section listing each URL with its title.
 """
 
+_FORMAT_SYSTEM: dict[str, str] = {
+    "default": (
+        "You are a research assistant that produces well-structured Markdown reports.\n"
+        "Given a set of web sources and their extracted content, synthesize a single,\n"
+        "comprehensive, factual document that mixes prose, bulleted lists, and at least\n"
+        "one comparison table where it aids clarity.\n\n"
+        "Structure:\n"
+        "- A short introduction.\n"
+        "- Main sections with Markdown headings (##, ###) using a mix of prose and\n"
+        "  bullet points.\n"
+        "- At least one comparison table where relevant.\n"
+        "- A concluding '## Key Takeaways' section.\n\n"
+        "Rules:\n" + _BASE_RULES
+    ),
+    "essay": (
+        "You are a research assistant that produces Markdown essays.\n"
+        "Synthesize the sources into a standard essay with an introduction, body,\n"
+        "and conclusion.\n\n"
+        "Structure:\n"
+        "- '## Introduction' — thesis and scope.\n"
+        "- Body sections under '##' headings, each a few flowing paragraphs.\n"
+        "- '## Conclusion' — summary and closing thoughts.\n\n"
+        "Style:\n"
+        "- Prose only. Do NOT use bullet points, numbered lists, or tables.\n"
+        "- Use transitional language to connect ideas.\n\n"
+        "Rules:\n" + _BASE_RULES
+    ),
+    "graphical": (
+        "You are a research assistant that produces data-forward Markdown reports.\n"
+        "Express the majority of the substance through Markdown tables and, where\n"
+        "useful, ASCII bar charts (e.g. 'Item A | ######## 8') so the reader can see\n"
+        "the shape of the data at a glance.\n\n"
+        "Structure:\n"
+        "- '## Introduction' — one short paragraph framing what the tables show.\n"
+        "- Main body made of at least 2 Markdown tables and/or ASCII charts with\n"
+        "  one-sentence captions. Prefer tables over prose wherever possible.\n"
+        "- '## Conclusion' — one short paragraph of takeaways.\n\n"
+        "Rules:\n" + _BASE_RULES
+    ),
+    "contrast": (
+        "You are a research assistant specialising in comparative analysis.\n"
+        "Your job is to surface and explain the DIFFERENCES between the sources —\n"
+        "where they disagree, diverge, or emphasise different aspects of the topic.\n\n"
+        "Structure:\n"
+        "- '## Overview' — brief framing of what's being compared.\n"
+        "- '## Points of Disagreement' — for each significant difference, a short\n"
+        "  heading, then side-by-side positioning of the sources that differ.\n"
+        "- At least one comparison table contrasting the positions.\n"
+        "- '## Conclusion' — what the divergences tell us.\n\n"
+        "Rules:\n"
+        "- Lead with differences; mention agreements only when they frame a contrast.\n"
+        + _BASE_RULES
+    ),
+    "correlate": (
+        "You are a research assistant specialising in synthesis and pattern-finding.\n"
+        "Your job is to surface and aggregate the SIMILARITIES across the sources —\n"
+        "the shared facts, shared conclusions, and reinforcing evidence.\n\n"
+        "Structure:\n"
+        "- '## Overview' — brief framing of the shared terrain.\n"
+        "- '## Common Findings' — for each shared claim, state it once and cite the\n"
+        "  sources that support it together, e.g. [Source 1][Source 3].\n"
+        "- '## Converging Evidence' — a table of claims and the sources backing them.\n"
+        "- '## Conclusion' — the consensus picture the sources paint together.\n\n"
+        "Rules:\n"
+        "- Lead with agreement; only note disagreements briefly if they qualify a\n"
+        "  consensus claim.\n"
+        + _BASE_RULES
+    ),
+}
+
+
+def system_for_format(output_format: str) -> str:
+    return _FORMAT_SYSTEM.get(output_format, _FORMAT_SYSTEM["default"])
+
+
+SYNTHESIS_SYSTEM = _FORMAT_SYSTEM["default"]
+
+
 SYNTHESIS_USER_TEMPLATE = """\
 # Research Topic
 {prompt}
+
+# Target Length
+Aim for approximately {target_tokens} tokens (~{target_words} words) of output.
+A variance of about 10% either way is acceptable; do not pad or truncate
+artificially to hit the number exactly.
 
 # Sources
 {sources_block}
 
 ---
-Synthesize the above sources into a comprehensive Markdown report on the topic.
-Include a "## Sources" section at the end with numbered references.
+Synthesize the above sources into a Markdown report on the topic following the
+structure rules in the system message. Include a "## Sources" section at the
+end with numbered references.
 """
 
 QUERY_GENERATION_SYSTEM = """\
@@ -35,17 +113,26 @@ Focus on different angles of the topic to get diverse results.
 """
 
 
-def build_synthesis_prompt(prompt: str, sources: list[dict]) -> str:
+def build_synthesis_prompt(
+    prompt: str,
+    sources: list[dict],
+    target_tokens: int = 1500,
+) -> str:
     """Build the user message for synthesis from scraped source data."""
     blocks: list[str] = []
     for i, src in enumerate(sources, 1):
         title = src.get("title", "Untitled")
         url = src.get("url", "")
         content = src.get("content", "")
-        # Truncate very long pages to keep within context window
         if len(content) > 6000:
             content = content[:6000] + "\n[...truncated]"
         blocks.append(f"### [Source {i}] {title}\nURL: {url}\n\n{content}")
 
     sources_block = "\n\n".join(blocks)
-    return SYNTHESIS_USER_TEMPLATE.format(prompt=prompt, sources_block=sources_block)
+    target_words = max(1, int(round(target_tokens * 0.75)))
+    return SYNTHESIS_USER_TEMPLATE.format(
+        prompt=prompt,
+        sources_block=sources_block,
+        target_tokens=target_tokens,
+        target_words=target_words,
+    )

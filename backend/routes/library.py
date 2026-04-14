@@ -37,6 +37,9 @@ async def submit_research(request: Request, user: dict = Depends(require_auth)):
     max_sources = int(body.get("max_sources", 10))
     focus_keywords = body.get("focus_keywords") or []
     notify_email = (body.get("notify_email") or "").strip() or None
+    raw_target = body.get("target_tokens")
+    target_tokens = int(raw_target) if raw_target is not None else None
+    output_format = body.get("output_format")
 
     try:
         result = await service.submit_research(
@@ -45,6 +48,8 @@ async def submit_research(request: Request, user: dict = Depends(require_auth)):
             max_sources=max_sources,
             focus_keywords=focus_keywords,
             notify_email=notify_email,
+            target_tokens=target_tokens,
+            output_format=output_format,
         )
     except RuntimeError as e:
         raise HTTPException(503, str(e))

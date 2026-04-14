@@ -10,7 +10,7 @@ from pathlib import Path
 
 from backend.config import get_settings
 from backend.database import get_db
-from backend.library.models import ResearchJob, StatusUpdate, TaskStatus, new_job_id
+from backend.library.models import OUTPUT_FORMATS, ResearchJob, StatusUpdate, TaskStatus, new_job_id
 from backend.library.queue import get_queue
 from backend.storage import get_user_upload_dir, get_user_index_dir
 
@@ -20,6 +20,13 @@ MAX_LIBRARY_SOURCES = 20
 MAX_CONCURRENT_ACTIVE_TASKS = 2
 _ACTIVE_STATUSES = (TaskStatus.QUEUED, TaskStatus.CRAWLING, TaskStatus.SYNTHESIZING)
 CANCELLED_RETENTION_MINUTES = 5
+
+MIN_TARGET_TOKENS = 300
+MAX_TARGET_TOKENS = 8000
+
+
+def default_target_tokens(max_sources: int) -> int:
+    return 600 + max_sources * 180
 
 
 def _artifacts_dir(user_id: str) -> Path:
@@ -57,6 +64,8 @@ async def submit_research(
     max_sources: int = 10,
     focus_keywords: list[str] | None = None,
     notify_email: str | None = None,
+    target_tokens: int | None = None,
+    output_format: str | None = None,
 ) -> dict:
     """Validate, persist a library_tasks row, and enqueue the job."""
     prompt = prompt.strip()
@@ -67,6 +76,17 @@ async def submit_research(
 
     if max_sources < 1 or max_sources > MAX_LIBRARY_SOURCES:
         raise ValueError(f"max_sources must be between 1 and {MAX_LIBRARY_SOURCES}")
+
+    if target_tokens is None:
+        target_tokens = default_target_tokens(max_sources)
+    if target_tokens < MIN_TARGET_TOKENS or target_tokens > MAX_TARGET_TOKENS:
+        raise ValueError(
+            f"target_tokens must be between {MIN_TARGET_TOKENS} and {MAX_TARGET_TOKENS}"
+        )
+
+    fmt = (output_format or "default").strip().lower()
+    if fmt not in OUTPUT_FORMATS:
+        raise ValueError(f"output_format must be one of: {', '.join(OUTPUT_FORMATS)}")
 
     active = await count_active_research_tasks(user_id)
     if active >= MAX_CONCURRENT_ACTIVE_TASKS:
@@ -98,6 +118,8 @@ async def submit_research(
         max_sources=max_sources,
         focus_keywords=focus_keywords or [],
         created_at=now,
+        target_tokens=target_tokens,
+        output_format=fmt,
     )
     await queue.enqueue(job)
 

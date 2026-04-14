@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { useLibrary, type LibraryTask } from "../hooks/useLibrary";
 import { getLibraryTask, getIndexEmailStatus } from "../api/client";
 
@@ -6,6 +8,20 @@ type View = "list" | "detail";
 
 const MAX_LIBRARY_SOURCES = 20;
 const MAX_CONCURRENT_ACTIVE_TASKS = 2;
+const MIN_TARGET_TOKENS = 300;
+const MAX_TARGET_TOKENS = 8000;
+
+const OUTPUT_FORMAT_OPTIONS: { value: string; label: string; description: string }[] = [
+  { value: "default", label: "Default", description: "Mixed report: intro, sections with bullets, comparison table(s), takeaways." },
+  { value: "essay", label: "Essay", description: "Flowing prose essay — intro, body, conclusion. No bullets or tables." },
+  { value: "graphical", label: "Graphical", description: "Mostly tables and ASCII charts with a short intro and conclusion." },
+  { value: "contrast", label: "Contrast", description: "Focus on differences and disagreements between sources." },
+  { value: "correlate", label: "Correlate", description: "Focus on shared findings and converging evidence across sources." },
+];
+
+function defaultTargetTokens(maxSources: number): number {
+  return 600 + maxSources * 180;
+}
 
 const STATUS_LABELS: Record<string, string> = {
   queued: "Queued",
@@ -41,6 +57,23 @@ function canImport(status: string) {
   return status === "review";
 }
 
+function LibraryReportMarkdown({ markdown }: { markdown: string }) {
+  return (
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        a: ({ href, children, ...rest }: ComponentPropsWithoutRef<"a">) => (
+          <a href={href} {...rest} target="_blank" rel="noopener noreferrer">
+            {children}
+          </a>
+        ),
+      }}
+    >
+      {markdown}
+    </ReactMarkdown>
+  );
+}
+
 export function Library() {
   const {
     tasks, loading, submitting, error,
@@ -50,6 +83,9 @@ export function Library() {
   const [view, setView] = useState<View>("list");
   const [prompt, setPrompt] = useState("");
   const [maxSources, setMaxSources] = useState(5);
+  const [targetTokens, setTargetTokens] = useState<number>(() => defaultTargetTokens(5));
+  const [targetTokensTouched, setTargetTokensTouched] = useState(false);
+  const [outputFormat, setOutputFormat] = useState<string>("default");
   const [showOptions, setShowOptions] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<LibraryTask | null>(null);
@@ -72,6 +108,14 @@ export function Library() {
   useEffect(() => {
     setMaxSources((n) => Math.min(MAX_LIBRARY_SOURCES, Math.max(1, n)));
   }, []);
+
+  // Keep target tokens in sync with the max-sources-based default until the
+  // user manually overrides it, at which point we stop recomputing.
+  useEffect(() => {
+    if (!targetTokensTouched) {
+      setTargetTokens(defaultTargetTokens(maxSources));
+    }
+  }, [maxSources, targetTokensTouched]);
 
   const activePipelineCount = useMemo(
     () => tasks.filter((t) => isActive(t.status)).length,
@@ -118,6 +162,8 @@ export function Library() {
     try {
       await submit(prompt.trim(), {
         max_sources: maxSources,
+        target_tokens: targetTokens,
+        output_format: outputFormat,
         notify_email: confirmEmail.trim() || undefined,
       });
       setPrompt("");
@@ -285,6 +331,55 @@ export function Library() {
                     }}
                   />
                 </label>
+                <label>
+                  Target report size ({MIN_TARGET_TOKENS}–{MAX_TARGET_TOKENS} tokens):
+                  <input
+                    type="number"
+                    min={MIN_TARGET_TOKENS}
+                    max={MAX_TARGET_TOKENS}
+                    step={50}
+                    value={targetTokens}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      if (Number.isNaN(v)) return;
+                      setTargetTokensTouched(true);
+                      setTargetTokens(
+                        Math.min(MAX_TARGET_TOKENS, Math.max(MIN_TARGET_TOKENS, Math.round(v))),
+                      );
+                    }}
+                  />
+                  {targetTokensTouched && (
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      style={{ marginLeft: "0.4rem" }}
+                      onClick={() => {
+                        setTargetTokensTouched(false);
+                        setTargetTokens(defaultTargetTokens(maxSources));
+                      }}
+                      title="Reset to default (600 + Max Sources × 180)"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </label>
+                <label>
+                  Output format:
+                  <select
+                    value={outputFormat}
+                    onChange={(e) => setOutputFormat(e.target.value)}
+                  >
+                    {OUTPUT_FORMAT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  <span
+                    className="muted"
+                    style={{ display: "block", fontSize: "0.72rem", marginTop: "0.25rem" }}
+                  >
+                    {OUTPUT_FORMAT_OPTIONS.find((o) => o.value === outputFormat)?.description}
+                  </span>
+                </label>
               </div>
             )}
           </div>
@@ -408,7 +503,8 @@ export function Library() {
               <div style={{ padding: "0.5rem 0 1rem 0", fontSize: "0.85rem", lineHeight: 1.5 }}>
                 <p style={{ marginTop: 0 }}>
                   The worker will search the web, scrape up to <strong>{maxSources}</strong> sources,
-                  and synthesize a report on:
+                  and synthesize a <strong>{OUTPUT_FORMAT_OPTIONS.find((o) => o.value === outputFormat)?.label || "Default"}</strong>-format
+                  report targeting ~<strong>{targetTokens}</strong> tokens on:
                 </p>
                 <blockquote style={{
                   margin: "0.75rem 0",
@@ -527,8 +623,8 @@ export function Library() {
           {detail.artifact && (
             <div className="library-detail-artifact">
               <h4>Generated Report</h4>
-              <div className="library-artifact-content">
-                <pre>{detail.artifact}</pre>
+              <div className="library-artifact-content library-artifact-markdown">
+                <LibraryReportMarkdown markdown={detail.artifact} />
               </div>
             </div>
           )}

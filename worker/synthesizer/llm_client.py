@@ -11,16 +11,24 @@ import config
 log = logging.getLogger(__name__)
 
 
-async def generate(prompt: str, system: str = "", temperature: float = 0.3) -> str:
+async def generate(
+    prompt: str,
+    system: str = "",
+    temperature: float = 0.3,
+    num_predict: int | None = None,
+) -> str:
     """Call Ollama /api/generate and return the full response text."""
+    options: dict = {
+        "temperature": temperature,
+        "num_ctx": config.OLLAMA_NUM_CTX,
+    }
+    if num_predict is not None:
+        options["num_predict"] = int(num_predict)
     payload: dict = {
         "model": config.OLLAMA_MODEL,
         "prompt": prompt,
         "stream": False,
-        "options": {
-            "temperature": temperature,
-            "num_ctx": config.OLLAMA_NUM_CTX,
-        },
+        "options": options,
     }
     if system:
         payload["system"] = system

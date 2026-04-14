@@ -9,7 +9,7 @@ import config
 from crawler.search import run_search
 from crawler.scraper import scrape_urls
 from synthesizer.llm_client import generate, quick_generate
-from synthesizer.prompts import SYNTHESIS_SYSTEM, build_synthesis_prompt
+from synthesizer.prompts import build_synthesis_prompt, system_for_format
 
 log = logging.getLogger(__name__)
 
@@ -94,8 +94,20 @@ async def run_pipeline(
         })
 
     await _abort_if_cancelled()
-    user_prompt = build_synthesis_prompt(job.prompt, sources_for_llm)
-    markdown = await generate(user_prompt, system=SYNTHESIS_SYSTEM, temperature=0.3)
+    target_tokens = int(getattr(job, "target_tokens", 1500) or 1500)
+    output_format = getattr(job, "output_format", "default") or "default"
+    user_prompt = build_synthesis_prompt(
+        job.prompt, sources_for_llm, target_tokens=target_tokens,
+    )
+    # Give the model ~15% headroom over the target so it can close the report
+    # cleanly without being cut off mid-sentence by num_predict.
+    num_predict = int(target_tokens * 1.15) + 64
+    markdown = await generate(
+        user_prompt,
+        system=system_for_format(output_format),
+        temperature=0.3,
+        num_predict=num_predict,
+    )
 
     await _abort_if_cancelled()
 
