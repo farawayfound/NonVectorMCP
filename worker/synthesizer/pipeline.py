@@ -99,9 +99,10 @@ async def run_pipeline(
     user_prompt = build_synthesis_prompt(
         job.prompt, sources_for_llm, target_tokens=target_tokens,
     )
-    # Give the model ~15% headroom over the target so it can close the report
-    # cleanly without being cut off mid-sentence by num_predict.
-    num_predict = int(target_tokens * 1.15) + 64
+    # Hard cap: target + 200 tokens of buffer for the Sources section.
+    # Keeping the cap tight forces the model to honour the word-count instruction
+    # rather than generating a short report and coasting to a natural stop.
+    num_predict = target_tokens + 200
     markdown = await generate(
         user_prompt,
         system=system_for_format(output_format),

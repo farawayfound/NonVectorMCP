@@ -93,9 +93,18 @@ SYNTHESIS_USER_TEMPLATE = """\
 {prompt}
 
 # Target Length
-Write approximately {target_words} words of substantive content (excluding the
-"## Sources" section). A ~10% variance is fine — do not pad or cut off early
-to hit the number exactly.
+Your report body MUST contain approximately {target_words} words (do not count
+the "## Sources" section). This is a firm requirement — treat it the same as
+the structure rules above.
+
+If you reach a natural stopping point before {target_words} words:
+- Expand each section with more detail, evidence, and analysis from the sources.
+- Add concrete examples, data points, and comparisons drawn from the source text.
+- Discuss implications, limitations, and context.
+- Open additional sub-sections if needed.
+
+Do NOT wrap up or write a conclusion until you are within ~50 words of the
+target. Do NOT pad with filler sentences — only add substantive content.
 
 # Sources
 {sources_block}

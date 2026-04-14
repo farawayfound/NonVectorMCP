@@ -20,7 +20,7 @@ const OUTPUT_FORMAT_OPTIONS: { value: string; label: string; description: string
 ];
 
 function defaultTargetTokens(maxSources: number): number {
-  return 600 + maxSources * 180;
+  return 300 + maxSources * 100;
 }
 
 const STATUS_LABELS: Record<string, string> = {

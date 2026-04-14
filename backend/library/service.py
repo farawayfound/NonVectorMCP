@@ -26,7 +26,7 @@ MAX_TARGET_TOKENS = 8000
 
 
 def default_target_tokens(max_sources: int) -> int:
-    return 600 + max_sources * 180
+    return 300 + max_sources * 100
 
 
 def _artifacts_dir(user_id: str) -> Path:
