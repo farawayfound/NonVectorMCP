@@ -20,6 +20,7 @@ router = APIRouter()
 
 # Invite codes issued from "Request Access" allow this many successful logins per code.
 REQUEST_ACCESS_MAX_USES = 5
+REQUEST_ACCESS_DAILY_LIMIT = 2
 
 
 @router.get("/github/login")
@@ -130,18 +131,32 @@ async def request_access(request: Request):
 
     db = await get_db()
     try:
-        # Rate limit: max 3 access requests per email per day
-        cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
+        # Rate limit: max 2 requests per UTC day per email OR per IP.
+        now_utc = datetime.now(timezone.utc)
+        cutoff = now_utc.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         cursor = await db.execute(
-            "SELECT COUNT(*) FROM access_requests WHERE email = ? AND created_at > ?",
+            "SELECT COUNT(*) FROM access_requests WHERE email = ? AND created_at >= ?",
             (email, cutoff),
         )
         row = await cursor.fetchone()
-        if row and row[0] >= 3:
+        email_count = int(row[0] or 0) if row else 0
+        if email_count >= REQUEST_ACCESS_DAILY_LIMIT:
             return JSONResponse(
                 {"error": "Too many requests for this email. Please try again later."},
                 status_code=429,
             )
+        if client_ip:
+            cursor = await db.execute(
+                "SELECT COUNT(*) FROM access_requests WHERE ip_address = ? AND created_at >= ?",
+                (client_ip, cutoff),
+            )
+            row = await cursor.fetchone()
+            ip_count = int(row[0] or 0) if row else 0
+            if ip_count >= REQUEST_ACCESS_DAILY_LIMIT:
+                return JSONResponse(
+                    {"error": "Too many requests from this IP address. Please try again later."},
+                    status_code=429,
+                )
 
         # Invite code: up to 5 redemptions, expires in 48 hours
         expires = (datetime.now(timezone.utc) + timedelta(hours=48)).isoformat()
