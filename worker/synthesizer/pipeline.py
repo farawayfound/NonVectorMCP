@@ -94,20 +94,14 @@ async def run_pipeline(
         })
 
     await _abort_if_cancelled()
-    target_tokens = int(getattr(job, "target_tokens", 1500) or 1500)
     output_format = getattr(job, "output_format", "default") or "default"
     user_prompt = build_synthesis_prompt(
-        job.prompt, sources_for_llm, target_tokens=target_tokens,
+        job.prompt, sources_for_llm, output_format=output_format,
     )
-    # Hard cap: target + 200 tokens of buffer for the Sources section.
-    # Keeping the cap tight forces the model to honour the word-count instruction
-    # rather than generating a short report and coasting to a natural stop.
-    num_predict = target_tokens + 200
     markdown = await generate(
         user_prompt,
         system=system_for_format(output_format),
         temperature=0.3,
-        num_predict=num_predict,
     )
 
     await _abort_if_cancelled()
