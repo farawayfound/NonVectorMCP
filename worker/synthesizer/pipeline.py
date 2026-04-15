@@ -2,12 +2,14 @@
 """Full research pipeline: search -> scrape -> synthesize."""
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any, Awaitable, Callable, Coroutine, Optional
 
 import config
 from crawler.search import run_search
 from crawler.scraper import scrape_urls
+from queue_consumer import WORKER_OLLAMA_REDIS_KEY
 from synthesizer.llm_client import generate, quick_generate
 from synthesizer.prompts import build_synthesis_prompt, system_for_format
 
@@ -25,6 +27,7 @@ async def run_pipeline(
     job,
     status_cb: StatusCallback | None = None,
     cancel_check: CancelCheck = None,
+    redis_consumer: Any | None = None,
 ) -> dict:
     """Execute the full research pipeline and return the artifact.
 
@@ -46,6 +49,23 @@ async def run_pipeline(
         except Exception as exc:
             log.debug("cancel_check failed (ignored): %s", exc)
 
+    llm_model = config.OLLAMA_MODEL
+    llm_num_ctx = config.OLLAMA_NUM_CTX
+    if redis_consumer is not None:
+        try:
+            raw = await redis_consumer.get_key(WORKER_OLLAMA_REDIS_KEY)
+            if raw:
+                data = json.loads(raw)
+                if data.get("model"):
+                    llm_model = str(data["model"]).strip()
+                if data.get("num_ctx") is not None:
+                    llm_num_ctx = int(data["num_ctx"])
+        except Exception as exc:
+            log.debug("worker ollama redis override skipped: %s", exc)
+
+    async def _llm_quick(prompt: str) -> str:
+        return await quick_generate(prompt, model=llm_model, num_ctx=llm_num_ctx)
+
     # -- Phase 1: Search ---------------------------------------------------
     await _abort_if_cancelled()
     await _status("crawling", "Searching the web...", 0.1)
@@ -53,7 +73,7 @@ async def run_pipeline(
     search_results = await run_search(
         prompt=job.prompt,
         max_results=job.max_sources,
-        llm_fn=quick_generate,
+        llm_fn=_llm_quick,
     )
 
     await _abort_if_cancelled()
@@ -102,6 +122,8 @@ async def run_pipeline(
         user_prompt,
         system=system_for_format(output_format),
         temperature=0.3,
+        model=llm_model,
+        num_ctx=llm_num_ctx,
     )
 
     await _abort_if_cancelled()
@@ -115,6 +137,8 @@ async def run_pipeline(
     summary = await generate(
         f"Summarize in 2-3 sentences:\n\n{markdown[:3000]}",
         temperature=0.2,
+        model=llm_model,
+        num_ctx=llm_num_ctx,
     )
 
     source_list = [

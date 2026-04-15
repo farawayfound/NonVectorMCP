@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentPropsWithoutRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import mermaid from "mermaid";
 import { useLibrary, type LibraryTask } from "../hooks/useLibrary";
 import { getLibraryTask, getIndexEmailStatus, getLibraryConfig } from "../api/client";
 
@@ -50,6 +51,49 @@ function canImport(status: string) {
   return status === "review";
 }
 
+let _mermaidReady = false;
+function ensureMermaid() {
+  if (_mermaidReady) return;
+  _mermaidReady = true;
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "default",
+    securityLevel: "loose",
+  });
+}
+
+let _mermaidCounter = 0;
+
+function MermaidChart({ code }: { code: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+
+  useEffect(() => {
+    ensureMermaid();
+    if (!ref.current) return;
+    const id = `mermaid-chart-${++_mermaidCounter}`;
+    setRenderError(null);
+    mermaid.render(id, code)
+      .then(({ svg }) => {
+        if (ref.current) ref.current.innerHTML = svg;
+      })
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err);
+        setRenderError(msg);
+      });
+  }, [code]);
+
+  if (renderError) {
+    return (
+      <pre style={{ background: "var(--bg-muted, #1e1e2e)", padding: "0.75rem", borderRadius: "6px", overflowX: "auto", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+        {code}
+      </pre>
+    );
+  }
+
+  return <div ref={ref} className="mermaid-chart" style={{ overflowX: "auto", margin: "0.75rem 0" }} />;
+}
+
 function LibraryReportMarkdown({ markdown }: { markdown: string }) {
   return (
     <ReactMarkdown
@@ -60,6 +104,14 @@ function LibraryReportMarkdown({ markdown }: { markdown: string }) {
             {children}
           </a>
         ),
+        code(props) {
+          const { children, className, ...rest } = props;
+          const lang = /language-(\w+)/.exec(className || "")?.[1];
+          if (lang === "mermaid") {
+            return <MermaidChart code={String(children).trim()} />;
+          }
+          return <code {...rest} className={className}>{children}</code>;
+        },
       }}
     >
       {markdown}

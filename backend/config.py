@@ -126,6 +126,12 @@ class Settings:
         # Max total research reports a user can accumulate (admin-configurable, 1–99, default 50).
         self.MAX_LIBRARY_ARTICLES = int(os.getenv("MAX_LIBRARY_ARTICLES", "50"))
 
+        # Nanobot Library worker Ollama (reachable from this backend, e.g. http://nanobot:11434).
+        # ``WORKER_OLLAMA_BASE_URL`` may be overridden from admin_config.json (Ollama tab).
+        self.WORKER_OLLAMA_BASE_URL = os.getenv("WORKER_OLLAMA_BASE_URL", "").strip()
+        self.WORKER_OLLAMA_MODEL = os.getenv("WORKER_OLLAMA_MODEL", "gemma4:e4b").strip()
+        self.WORKER_OLLAMA_NUM_CTX = int(os.getenv("WORKER_OLLAMA_NUM_CTX", "8192"))
+
         # ── Runtime admin overrides (mutable; persisted to DATA_DIR/admin_config.json) ──
         # These are set/updated via the admin Configuration tab at runtime.
         # "Default" overrides apply to the Your Documents agent only.
@@ -166,8 +172,22 @@ class Settings:
                 self.MAX_LIBRARY_SOURCES = max(1, min(99, int(data["max_library_sources"])))
             if data.get("max_library_articles"):
                 self.MAX_LIBRARY_ARTICLES = max(1, min(99, int(data["max_library_articles"])))
+            if "worker_ollama_base_url" in data:
+                self.WORKER_OLLAMA_BASE_URL = str(data.get("worker_ollama_base_url") or "").strip()
+            wm = data.get("worker_ollama_model")
+            if wm and str(wm).strip():
+                self.WORKER_OLLAMA_MODEL = str(wm).strip()
+            if data.get("worker_ollama_num_ctx"):
+                self.WORKER_OLLAMA_NUM_CTX = max(512, int(data["worker_ollama_num_ctx"]))
         except Exception:
             pass
+
+    def resolved_worker_ollama_base_url(self) -> str:
+        """URL the backend uses to reach nanobot's Ollama (LAN). Admin JSON overrides env."""
+        u = (self.WORKER_OLLAMA_BASE_URL or "").strip().rstrip("/")
+        if u:
+            return u
+        return (os.getenv("WORKER_OLLAMA_BASE_URL") or "").strip().rstrip("/")
 
     def save_admin_config(self) -> None:
         """Persist current runtime overrides to DATA_DIR/admin_config.json."""
@@ -185,6 +205,9 @@ class Settings:
             "ollama_model": self.OLLAMA_MODEL,
             "max_library_sources": self.MAX_LIBRARY_SOURCES,
             "max_library_articles": self.MAX_LIBRARY_ARTICLES,
+            "worker_ollama_base_url": self.WORKER_OLLAMA_BASE_URL,
+            "worker_ollama_model": self.WORKER_OLLAMA_MODEL,
+            "worker_ollama_num_ctx": self.WORKER_OLLAMA_NUM_CTX,
         }
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

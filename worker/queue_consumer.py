@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 
 _STREAM_JOBS = "library:jobs"
 _STREAM_STATUS_PREFIX = "library:status:"
+WORKER_OLLAMA_REDIS_KEY = "library:worker:ollama"
 _CANCEL_PREFIX = "library:cancel:"
 _GROUP = "workers"
 
@@ -108,6 +109,12 @@ class QueueConsumer:
         """Store an arbitrary key with TTL — used by the stats publisher."""
         assert self._redis
         await self._redis.set(key, value, ex=ttl_sec)
+
+    async def get_key(self, key: str) -> str | None:
+        """Read a plain Redis key (used for admin-pushed Ollama overrides)."""
+        assert self._redis
+        val = await self._redis.get(key)
+        return val
 
     async def is_cancel_requested(self, job_id: str) -> bool:
         """True if the API set a cooperative-cancel flag for this job (see backend library queue)."""

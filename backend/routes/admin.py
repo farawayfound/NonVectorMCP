@@ -12,10 +12,25 @@ from backend.auth.middleware import require_admin
 from backend.auth.invite_codes import create_invite
 from backend.database import get_db
 from backend.chat.ollama_client import (
-    health_check, list_models, pull_model, delete_model,
-    list_loaded_models, ensure_single_model_loaded,
-    preload_model, unload_model,
-    get_model_context_window, get_inference_stats, get_readiness_metrics,
+    health_check,
+    health_check_at_base,
+    list_models,
+    list_models_at_base,
+    pull_model,
+    pull_model_at_base,
+    delete_model,
+    delete_model_at_base,
+    list_loaded_models,
+    list_loaded_models_at_base,
+    ensure_single_model_loaded,
+    ensure_single_model_loaded_at_base,
+    preload_model,
+    unload_model,
+    unload_model_at_base,
+    get_model_context_window,
+    get_model_context_window_at_base,
+    get_inference_stats,
+    get_readiness_metrics,
 )
 from backend.config import get_settings
 from backend.storage import get_demo_upload_dir, get_demo_index_dir
@@ -29,6 +44,51 @@ _demo_job: dict = {"status": "idle", "error": None}
 
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".pptx", ".csv"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
+
+
+def _validate_worker_ollama_base_url(url: str) -> str:
+    u = (url or "").strip().rstrip("/")
+    if not u:
+        return ""
+    if not (u.startswith("http://") or u.startswith("https://")):
+        raise HTTPException(400, "Worker Ollama base URL must start with http:// or https://")
+    return u
+
+
+async def _worker_ollama_snapshot() -> dict:
+    """Ollama state for the Library worker host (nanobot), as seen from this backend."""
+    settings = get_settings()
+    base = settings.resolved_worker_ollama_base_url()
+    if not base:
+        return {
+            "ollama": {
+                "status": "unconfigured",
+                "error": "Set the nanobot Ollama URL (host LAN IP and port 11434, reachable from this server).",
+                "base_url": "",
+            },
+            "configured_model": settings.WORKER_OLLAMA_MODEL,
+            "num_ctx": settings.WORKER_OLLAMA_NUM_CTX,
+            "models": [],
+            "loaded_models": [],
+            "loaded_names": [],
+            "context_window": None,
+            "base_url": "",
+        }
+    status = await health_check_at_base(base)
+    models = await list_models_at_base(base)
+    loaded = await list_loaded_models_at_base(base)
+    loaded_names = [m.get("name", "") for m in loaded]
+    context_window = await get_model_context_window_at_base(base, settings.WORKER_OLLAMA_MODEL)
+    return {
+        "ollama": status,
+        "configured_model": settings.WORKER_OLLAMA_MODEL,
+        "num_ctx": settings.WORKER_OLLAMA_NUM_CTX,
+        "models": models,
+        "loaded_models": loaded,
+        "loaded_names": loaded_names,
+        "context_window": context_window,
+        "base_url": base,
+    }
 
 
 def _inject_curated_chunks(index_dir: Path) -> int:
@@ -357,14 +417,14 @@ async def admin_activity(
 
 @router.get("/ollama")
 async def admin_ollama(request: Request, user: dict = Depends(require_admin)):
-    """Check Ollama status, available models, memory state, and inference metrics."""
+    """Check Ollama for backend (chat) and Library worker (nanobot)."""
     status = await health_check()
     models = await list_models()
     loaded = await list_loaded_models()
     settings = get_settings()
     loaded_names = [m.get("name", "") for m in loaded]
     context_window = await get_model_context_window(settings.OLLAMA_MODEL)
-    return {
+    backend = {
         "ollama": status,
         "configured_model": settings.OLLAMA_MODEL,
         "suggestion_model": settings.SUGGESTION_MODEL,
@@ -375,6 +435,8 @@ async def admin_ollama(request: Request, user: dict = Depends(require_admin)):
         "inference_stats": get_inference_stats(),
         "readiness": get_readiness_metrics(),
     }
+    worker = await _worker_ollama_snapshot()
+    return {"backend": backend, "worker": worker}
 
 
 @router.put("/ollama/model")
@@ -486,6 +548,169 @@ async def admin_set_suggestion_model(
     return {"status": "ok", "suggestion_model": name}
 
 
+def _worker_ollama_base_or_400() -> str:
+    base = get_settings().resolved_worker_ollama_base_url()
+    if not base:
+        raise HTTPException(
+            400,
+            "Worker Ollama base URL is not configured. Set it in the nanobot section "
+            "(LAN URL to port 11434 on the worker host).",
+        )
+    return base
+
+
+@router.put("/ollama/worker/settings")
+async def admin_worker_ollama_settings(request: Request, user: dict = Depends(require_admin)):
+    """Persist nanobot Ollama admin URL, context size, and default model; push model/ctx to Redis."""
+    body = await request.json()
+    settings = get_settings()
+    changed = False
+    if "base_url" in body:
+        settings.WORKER_OLLAMA_BASE_URL = _validate_worker_ollama_base_url(body.get("base_url", "") or "")
+        changed = True
+    if "num_ctx" in body:
+        n = int(body["num_ctx"])
+        if n < 512:
+            raise HTTPException(400, "num_ctx must be at least 512")
+        settings.WORKER_OLLAMA_NUM_CTX = n
+        changed = True
+    if "model" in body:
+        m = (body.get("model") or "").strip()
+        if not m:
+            raise HTTPException(400, "model must be non-empty when provided")
+        settings.WORKER_OLLAMA_MODEL = m
+        changed = True
+    if changed:
+        settings.save_admin_config()
+        log_event("worker_ollama_settings_changed", user_id=user["user_id"])
+    try:
+        from backend.library.worker_runtime import publish_worker_ollama_from_settings
+
+        await publish_worker_ollama_from_settings()
+    except Exception as exc:
+        logging.warning("worker ollama redis publish after settings: %s", exc)
+    return {
+        "status": "ok",
+        "base_url": settings.WORKER_OLLAMA_BASE_URL,
+        "resolved_base_url": settings.resolved_worker_ollama_base_url(),
+        "num_ctx": settings.WORKER_OLLAMA_NUM_CTX,
+        "model": settings.WORKER_OLLAMA_MODEL,
+    }
+
+
+@router.put("/ollama/worker/model")
+async def admin_worker_ollama_set_model(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+):
+    """Set the Library worker's default Ollama model and preload it on nanobot."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    base = _worker_ollama_base_or_400()
+    settings = get_settings()
+    settings.WORKER_OLLAMA_MODEL = name
+    settings.save_admin_config()
+    log_event("worker_ollama_model_changed", user_id=user["user_id"], model=name)
+    try:
+        from backend.library.worker_runtime import publish_worker_ollama_from_settings
+
+        await publish_worker_ollama_from_settings()
+    except Exception as exc:
+        logging.warning("worker ollama redis publish: %s", exc)
+    background_tasks.add_task(
+        ensure_single_model_loaded_at_base, base, name, settings.WORKER_OLLAMA_NUM_CTX
+    )
+    return {"status": "ok", "model": name, "preloading": True}
+
+
+@router.post("/ollama/worker/pull")
+async def admin_worker_ollama_pull(request: Request, user: dict = Depends(require_admin)):
+    """Pull a model on the nanobot Ollama instance (streams progress)."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    base = _worker_ollama_base_or_400()
+    log_event("worker_ollama_pull_start", user_id=user["user_id"], model=name)
+
+    async def event_stream():
+        try:
+            async for progress in pull_model_at_base(base, name):
+                yield f"data: {json.dumps(progress)}\n\n"
+            log_event("worker_ollama_pull_complete", user_id=user["user_id"], model=name)
+        except Exception as e:
+            yield f"data: {json.dumps({'status': 'error', 'error': str(e)})}\n\n"
+            log_event("worker_ollama_pull_failed", user_id=user["user_id"], model=name, error=str(e))
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/ollama/worker/delete")
+async def admin_worker_ollama_delete_model(request: Request, user: dict = Depends(require_admin)):
+    """Delete a model from nanobot Ollama."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    base = _worker_ollama_base_or_400()
+    try:
+        result = await delete_model_at_base(base, name)
+        log_event("worker_ollama_model_deleted", user_id=user["user_id"], model=name)
+        return result
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete model: {e}")
+
+
+@router.post("/ollama/worker/load")
+async def admin_worker_ollama_load_model(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    user: dict = Depends(require_admin),
+):
+    """Load a model into nanobot Ollama memory (single-model policy)."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    base = _worker_ollama_base_or_400()
+    settings = get_settings()
+    settings.WORKER_OLLAMA_MODEL = name
+    settings.save_admin_config()
+    log_event("worker_ollama_model_loaded", user_id=user["user_id"], model=name)
+    try:
+        from backend.library.worker_runtime import publish_worker_ollama_from_settings
+
+        await publish_worker_ollama_from_settings()
+    except Exception as exc:
+        logging.warning("worker ollama redis publish: %s", exc)
+    background_tasks.add_task(
+        ensure_single_model_loaded_at_base, base, name, settings.WORKER_OLLAMA_NUM_CTX
+    )
+    return {"status": "loading", "name": name}
+
+
+@router.post("/ollama/worker/unload")
+async def admin_worker_ollama_unload_model(
+    request: Request, user: dict = Depends(require_admin),
+):
+    """Unload a model from nanobot Ollama memory."""
+    body = await request.json()
+    name = body.get("name", "").strip()
+    if not name:
+        raise HTTPException(400, "Model name is required")
+    base = _worker_ollama_base_or_400()
+    try:
+        await unload_model_at_base(base, name)
+        log_event("worker_ollama_model_unloaded", user_id=user["user_id"], model=name)
+        return {"status": "unloaded", "name": name}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to unload model: {e}")
+
+
 # ── Chat Performance Log ─────────────────────────────────────────────────────
 
 _PERF_PAGE_SIZE = 20
@@ -579,7 +804,7 @@ async def admin_update_config(
     Accepted fields (all optional):
     - ``num_ctx`` (int)   — context window; triggers a model reload in Ollama
     - ``system_prompt``   — replaces the built-in system prompt (empty string = reset)
-    - ``system_rules``    — extra rules appended to whichever prompt is active
+    - ``system_rules``    — immutable system rules for the Your Documents agent (empty = none)
     - ``index_sanitize_workspace`` (bool) — PII redaction for user Workspace index builds
     - ``index_sanitize_ama_kb`` (bool) — PII redaction for AMA KB index builds
     """

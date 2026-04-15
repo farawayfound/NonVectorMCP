@@ -202,6 +202,12 @@ async def lifespan(app: FastAPI):
     try:
         await init_queue(settings.REDIS_URL)
         log_event("redis_connected", url=settings.REDIS_URL)
+        try:
+            from backend.library.worker_runtime import publish_worker_ollama_from_settings
+
+            await publish_worker_ollama_from_settings()
+        except Exception as exc:
+            logging.warning("worker ollama runtime redis seed failed: %s", exc)
     except Exception as exc:
         logging.error(
             "redis queue init failed — Library research will fail until redis is reachable "
@@ -222,6 +228,12 @@ async def lifespan(app: FastAPI):
                     await init_queue(settings.REDIS_URL)
                     log_event("redis_connected", url=settings.REDIS_URL, reconnected=True)
                     logging.info("redis queue reconnected at %s", settings.REDIS_URL)
+                    try:
+                        from backend.library.worker_runtime import publish_worker_ollama_from_settings
+
+                        await publish_worker_ollama_from_settings()
+                    except Exception as exc2:
+                        logging.warning("worker ollama redis seed after reconnect failed: %s", exc2)
                     return
                 except Exception as exc2:
                     logging.warning("redis queue reconnect attempt failed: %s", exc2)

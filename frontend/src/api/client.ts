@@ -224,7 +224,7 @@ export const getAdminActivity = (params?: Record<string, string>) => {
 };
 export const getAdminOllama = () => request<any>("/admin/ollama");
 
-// Admin — Ollama management
+// Admin — Ollama management (macmini / backend chat)
 export const setOllamaModel = (name: string) =>
   request<any>("/admin/ollama/model", { method: "PUT", body: JSON.stringify({ name }) });
 export const deleteOllamaModel = (name: string) =>
@@ -234,8 +234,8 @@ export const loadOllamaModel = (name: string) =>
 export const unloadOllamaModel = (name: string) =>
   request<any>("/admin/ollama/unload", { method: "POST", body: JSON.stringify({ name }) });
 
-export async function* streamOllamaPull(name: string): AsyncGenerator<any> {
-  const res = await fetch(`${BASE}/admin/ollama/pull`, {
+async function* streamOllamaPullPath(path: string, name: string): AsyncGenerator<any> {
+  const res = await fetch(`${BASE}${path}`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -264,6 +264,26 @@ export async function* streamOllamaPull(name: string): AsyncGenerator<any> {
       }
     }
   }
+}
+
+export async function* streamOllamaPull(name: string): AsyncGenerator<any> {
+  yield* streamOllamaPullPath("/admin/ollama/pull", name);
+}
+
+// Admin — nanobot / Library worker Ollama (remote from backend)
+export const putWorkerOllamaSettings = (body: { base_url?: string; num_ctx?: number; model?: string }) =>
+  request<any>("/admin/ollama/worker/settings", { method: "PUT", body: JSON.stringify(body) });
+export const setWorkerOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/worker/model", { method: "PUT", body: JSON.stringify({ name }) });
+export const deleteWorkerOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/worker/delete", { method: "POST", body: JSON.stringify({ name }) });
+export const loadWorkerOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/worker/load", { method: "POST", body: JSON.stringify({ name }) });
+export const unloadWorkerOllamaModel = (name: string) =>
+  request<any>("/admin/ollama/worker/unload", { method: "POST", body: JSON.stringify({ name }) });
+
+export async function* streamWorkerOllamaPull(name: string): AsyncGenerator<any> {
+  yield* streamOllamaPullPath("/admin/ollama/worker/pull", name);
 }
 
 // Chat — Suggestions

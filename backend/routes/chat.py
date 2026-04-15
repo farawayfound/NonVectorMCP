@@ -298,10 +298,9 @@ async def chat_documents(request: Request):
     if not kb_dir.exists():
         return {"error": "No indexed documents found. Upload and index documents first."}
 
-    # Load per-user agent config (system prompt/rules overrides)
+    # Load per-user agent config (system prompt override). System rules are admin-only.
     agent_cfg = get_user_agent_config(user["user_id"])
     user_prompt = agent_cfg.get("system_prompt") or None
-    user_rules = agent_cfg.get("system_rules") or None
 
     user_id = user["user_id"]
     user_name = user.get("display_name") or user.get("github_username")
@@ -328,7 +327,7 @@ async def chat_documents(request: Request):
                     level=level,
                     perf_out=perf,
                     user_prompt=user_prompt,
-                    user_rules=user_rules,
+                    user_rules=None,
                 )
             else:
                 ev_iter = ask_stream_events(
@@ -339,7 +338,7 @@ async def chat_documents(request: Request):
                     level=level,
                     perf_out=perf,
                     user_prompt=user_prompt,
-                    user_rules=user_rules,
+                    user_rules=None,
                 )
             async for ev in ev_iter:
                 if "thinking" in ev:

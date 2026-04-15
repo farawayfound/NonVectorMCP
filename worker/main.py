@@ -57,6 +57,7 @@ async def _process_job(consumer: QueueConsumer, stream_id: str, job) -> None:
                 consumer.publish_status(job_id, status, msg, progress, sources)
             ),
             cancel_check=cancel_check,
+            redis_consumer=consumer,
         )
 
         if await cancel_check():

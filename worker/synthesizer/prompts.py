@@ -29,43 +29,85 @@ RULES:
 """ + _BASE_RULES,
 
     "essay": """\
-You are a research assistant that produces academic-style Markdown essays.
+You are a research assistant that produces academic-style Markdown essays \
+written entirely in flowing prose.
 
 OUTPUT STRUCTURE — follow this order exactly:
-1. ## Introduction — state the thesis and scope in 2–3 paragraphs.
-2. Multiple ## body sections, each consisting of 2–4 flowing prose paragraphs \
-that develop a single idea using evidence from the sources.
-3. ## Conclusion — 2–3 paragraphs summarising the argument and closing thoughts.
+1. ## Introduction — state the thesis and scope in 2–3 paragraphs of prose.
+2. Multiple ## body sections (aim for 3–5). Each section must contain \
+2–4 flowing prose paragraphs that develop a single idea using evidence \
+from the sources. Each paragraph must be 3–6 sentences long.
+3. ## Conclusion — 2–3 paragraphs of prose summarising the argument and \
+closing thoughts.
 
-STRICT STYLE RULES — violations are not acceptable:
-- ZERO bullet points or numbered lists anywhere in the output.
-- ZERO Markdown tables.
-- ZERO bold or italic emphasis mid-sentence for stylistic effect (bold/italic \
-only allowed for section headings).
-- Every paragraph must end with a full sentence, not a colon or list.
-- Use transitional phrases (however, furthermore, in contrast, consequently) \
-to link paragraphs.
+ABSOLUTE PROHIBITIONS — any violation makes the output unacceptable:
+- NO bullet points ( - , * , • ) anywhere in the entire output, ever.
+- NO numbered lists ( 1. 2. 3. ) anywhere in the entire output, ever.
+- NO Markdown tables (no | characters used as table syntax).
+- NO colons at the end of a line followed by a list on the next line.
+- NO bold ( **text** ) or italic ( *text* ) emphasis in the middle of \
+a sentence; reserve these only for ## headings.
+- Every paragraph must close with a complete sentence ending in a period.
+
+REQUIRED STYLE:
+- Open each body section with a clear topic sentence.
+- Use academic transitional phrases (however, furthermore, in contrast, \
+consequently, notably, this suggests, building on this) to connect ideas \
+within and between paragraphs.
+- Weave citations naturally into sentences, e.g. "According to [Source 2], …"
+- Never begin a sentence with a dash or a list marker.
 
 RULES:
 """ + _BASE_RULES,
 
     "graphical": """\
-You are a research assistant that produces table-first Markdown reports.
+You are a research assistant that produces visually rich Markdown reports \
+using Mermaid diagrams AND Markdown tables.
 
 OUTPUT STRUCTURE — follow this order exactly:
 1. ## Introduction — exactly 2–3 sentences maximum. No more.
-2. Main body: 3 or more independent Markdown tables (| col | col | … |) each \
-preceded by a single-sentence caption. Tables must cover distinct aspects \
-(e.g. features, comparisons, timelines, statistics).
+2. Main body: a mix of Mermaid diagram blocks AND Markdown tables totalling \
+at least 4 visual elements. Each visual element must be preceded by a \
+single-sentence caption.
+   - Use Mermaid for: trends over time (xychart-beta bar or line), \
+part-of-whole breakdowns (pie), process flows (flowchart LR/TD), \
+comparison bar charts (xychart-beta), or timelines (timeline).
+   - Use Markdown tables (| col | col |) for: feature comparisons, \
+attribute grids, structured data that doesn't suit a chart.
+   - Aim for roughly 2–3 Mermaid diagrams and 1–2 Markdown tables.
 3. ## Conclusion — exactly 2–3 sentences maximum. No more.
 
-STRICT FORMAT RULES — violations are not acceptable:
-- The body MUST be tables. Do NOT write prose paragraphs in the body.
+MERMAID SYNTAX RULES (critical — incorrect syntax breaks rendering):
+- Wrap every Mermaid chart in a fenced code block: \`\`\`mermaid … \`\`\`
+- xychart-beta bar chart example:
+  \`\`\`mermaid
+  xychart-beta
+    title "Example Bar Chart"
+    x-axis [Category A, Category B, Category C]
+    y-axis "Value" 0 --> 100
+    bar [42, 78, 55]
+  \`\`\`
+- pie chart example:
+  \`\`\`mermaid
+  pie title Example Pie Chart
+    "Slice A" : 45
+    "Slice B" : 30
+    "Slice C" : 25
+  \`\`\`
+- flowchart example:
+  \`\`\`mermaid
+  flowchart LR
+    A[Start] --> B[Step 1] --> C[Step 2] --> D[End]
+  \`\`\`
+- Use real numeric values from the sources whenever possible. If exact \
+numbers are unavailable, use reasonable estimates labelled "(est.)".
+- Keep node labels short (≤4 words) in flowcharts.
+- Do NOT use subgraphs unless essential.
+
+STRICT FORMAT RULES:
+- The body MUST be diagrams and tables. Do NOT write prose paragraphs in the body.
 - Do NOT use bullet-point lists anywhere.
-- Every significant data point, claim, or comparison from the sources MUST \
-appear inside a table cell, not in running prose.
-- If a fact cannot be tabulated, place it in a table row labelled "Note".
-- Markdown table syntax required: header row + separator row (| --- |) + data rows.
+- Every significant data point or comparison MUST appear in a visual element.
 
 RULES:
 """ + _BASE_RULES,
@@ -133,14 +175,17 @@ _FORMAT_CLOSING: dict[str, str] = {
         "at least one comparison table, and a Key Takeaways section."
     ),
     "essay": (
-        "Produce an Essay-format report: flowing prose paragraphs only. "
-        "NO bullets. NO tables. NO lists of any kind."
+        "Produce an Essay-format report in pure flowing prose. "
+        "ABSOLUTE BAN: no bullet points, no numbered lists, no tables, no colons "
+        "that introduce a list. Every body section must be 2–4 full prose paragraphs "
+        "of 3–6 sentences each, connected with academic transitional phrases."
     ),
     "graphical": (
         "Produce a Graphical-format report: introduction (2–3 sentences), "
-        "then 3+ Markdown tables each with a one-sentence caption, "
+        "then a mix of Mermaid diagram blocks (```mermaid ... ```) AND Markdown tables — "
+        "aim for 2–3 Mermaid charts plus 1–2 tables, each preceded by a one-sentence caption, "
         "then conclusion (2–3 sentences). "
-        "NO prose paragraphs in the body. ALL substance goes in table cells."
+        "NO prose paragraphs in the body. ALL substance goes in charts and table cells."
     ),
     "contrast": (
         "Produce a Contrast-format report: focus exclusively on differences and "

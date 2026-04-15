@@ -145,20 +145,22 @@ async def token_metrics(request: Request, user: dict = Depends(require_auth)):
 
 @router.get("/agent-config")
 async def get_agent_config(request: Request, user: dict = Depends(require_auth)):
-    """Get the user's agent configuration (system prompt and rules overrides)."""
+    """Get the user's agent configuration (system prompt override and admin defaults)."""
     config = get_user_agent_config(user["user_id"])
     # Also return admin defaults so the frontend can show them as placeholders
     from backend.config import get_settings
     settings = get_settings()
     config["default_system_prompt"] = settings.SYSTEM_PROMPT_OVERRIDE or ""
     config["default_system_rules"] = settings.SYSTEM_RULES_OVERRIDE or ""
+    config["system_rules"] = ""
     return config
 
 
 @router.put("/agent-config")
 async def update_agent_config(request: Request, user: dict = Depends(require_auth)):
-    """Update the user's agent configuration (system prompt and rules)."""
+    """Update the user's agent configuration (system prompt only; rules are admin-managed)."""
     body = await request.json()
+    body = {k: v for k, v in body.items() if k == "system_prompt"}
     saved = save_user_agent_config(user["user_id"], body)
     log_event("agent_config_update", user_id=user["user_id"])
     return saved

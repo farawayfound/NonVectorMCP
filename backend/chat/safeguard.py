@@ -57,9 +57,9 @@ def get_system_prompt(
         ama       — Ask Me Anything (demo/resume content).
                     Uses AMA_SYSTEM_PROMPT_OVERRIDE / AMA_SYSTEM_RULES_OVERRIDE.
         documents — User's own uploaded documents.
-                    Uses per-user overrides (user_prompt/user_rules) when set,
-                    otherwise falls back to admin defaults
-                    (SYSTEM_PROMPT_OVERRIDE / SYSTEM_RULES_OVERRIDE).
+                    Uses per-user ``user_prompt`` when set, otherwise
+                    ``SYSTEM_PROMPT_OVERRIDE``. Rules always come from
+                    ``SYSTEM_RULES_OVERRIDE`` (``user_rules`` is ignored for this mode).
     """
     settings = get_settings()
     owner = settings.OWNER_NAME or "the document author"
@@ -72,14 +72,15 @@ def get_system_prompt(
             base = _system_prompt_cached(mode, owner)
         rules = settings.AMA_SYSTEM_RULES_OVERRIDE
     else:
-        # Documents agent — per-user overrides take priority, then admin defaults
+        # Documents agent — per-user prompt override, then admin default prompt.
+        # Rules are always the admin system rules (end users cannot override).
         if user_prompt:
             base = user_prompt
         elif settings.SYSTEM_PROMPT_OVERRIDE:
             base = settings.SYSTEM_PROMPT_OVERRIDE
         else:
             base = _system_prompt_cached(mode, owner)
-        rules = user_rules or settings.SYSTEM_RULES_OVERRIDE
+        rules = settings.SYSTEM_RULES_OVERRIDE
 
     if rules:
         composed = base.rstrip() + "\n\n" + rules

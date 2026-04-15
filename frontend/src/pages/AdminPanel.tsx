@@ -12,6 +12,11 @@ import {
   loadOllamaModel,
   unloadOllamaModel,
   streamOllamaPull,
+  putWorkerOllamaSettings,
+  deleteWorkerOllamaModel,
+  loadWorkerOllamaModel,
+  unloadWorkerOllamaModel,
+  streamWorkerOllamaPull,
   setSuggestionModel,
   getDemoDocuments,
   deleteDemoDocument,
@@ -606,11 +611,20 @@ function OllamaTab() {
   const [pullName, setPullName] = useState("");
   const [pullStatus, setPullStatus] = useState("");
   const [pulling, setPulling] = useState(false);
+  const [pullNameWorker, setPullNameWorker] = useState("");
+  const [pullStatusWorker, setPullStatusWorker] = useState("");
+  const [pullingWorker, setPullingWorker] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingModel, setLoadingModel] = useState<string | null>(null);
   const [unloadingModel, setUnloadingModel] = useState<string | null>(null);
+  const [loadingModelWorker, setLoadingModelWorker] = useState<string | null>(null);
+  const [unloadingModelWorker, setUnloadingModelWorker] = useState<string | null>(null);
   const [savingSuggModel, setSavingSuggModel] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [workerBaseDraft, setWorkerBaseDraft] = useState("");
+  const [workerNumCtxDraft, setWorkerNumCtxDraft] = useState("");
+  const [savingWorkerSettings, setSavingWorkerSettings] = useState(false);
+  const pollRefMac = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRefWorker = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     const d = await getAdminOllama().catch(() => null);
@@ -621,23 +635,55 @@ function OllamaTab() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRefMac.current) clearInterval(pollRefMac.current);
+      if (pollRefWorker.current) clearInterval(pollRefWorker.current);
+    };
   }, []);
 
-  const startLoadingPoll = (name: string) => {
-    if (pollRef.current) clearInterval(pollRef.current);
+  useEffect(() => {
+    if (!data) return;
+    const w = data.worker;
+    if (w) {
+      setWorkerBaseDraft((w.base_url as string) || "");
+      setWorkerNumCtxDraft(String(w.num_ctx ?? ""));
+    }
+  }, [data]);
+
+  const startLoadingPollMac = (name: string) => {
+    if (pollRefMac.current) clearInterval(pollRefMac.current);
     setLoadingModel(name);
     let attempts = 0;
-    pollRef.current = setInterval(async () => {
+    pollRefMac.current = setInterval(async () => {
       attempts++;
       const d = await getAdminOllama().catch(() => null);
       if (!d) return;
       setData(d);
-      const isLoaded = (d.loaded_names as string[] || []).includes(name);
+      const b = d.backend ?? d;
+      const isLoaded = (b.loaded_names as string[] || []).includes(name);
       if (isLoaded || attempts >= 30) {
-        clearInterval(pollRef.current!);
-        pollRef.current = null;
+        clearInterval(pollRefMac.current!);
+        pollRefMac.current = null;
         setLoadingModel(null);
+      }
+    }, 2000);
+  };
+
+  const startLoadingPollWorker = (name: string) => {
+    if (pollRefWorker.current) clearInterval(pollRefWorker.current);
+    setLoadingModelWorker(name);
+    let attempts = 0;
+    pollRefWorker.current = setInterval(async () => {
+      attempts++;
+      const d = await getAdminOllama().catch(() => null);
+      if (!d) return;
+      setData(d);
+      const w = d.worker;
+      const isLoaded = (w?.loaded_names as string[] || []).includes(name);
+      if (isLoaded || attempts >= 30) {
+        clearInterval(pollRefWorker.current!);
+        pollRefWorker.current = null;
+        setLoadingModelWorker(null);
       }
     }, 2000);
   };
@@ -646,7 +692,7 @@ function OllamaTab() {
     setError(null);
     try {
       await loadOllamaModel(name);
-      startLoadingPoll(name);
+      startLoadingPollMac(name);
     } catch (err: any) {
       setError(err.message || "Failed to load model");
     }
@@ -704,12 +750,101 @@ function OllamaTab() {
     }
   };
 
+  const handleLoadWorker = async (name: string) => {
+    setError(null);
+    try {
+      await loadWorkerOllamaModel(name);
+      startLoadingPollWorker(name);
+    } catch (err: any) {
+      setError(err.message || "Failed to load model on nanobot");
+    }
+  };
+
+  const handleUnloadWorker = async (name: string) => {
+    setError(null);
+    setUnloadingModelWorker(name);
+    try {
+      await unloadWorkerOllamaModel(name);
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Failed to unload model on nanobot");
+    } finally {
+      setUnloadingModelWorker(null);
+    }
+  };
+
+  const handleDeleteWorker = async (name: string) => {
+    if (!confirm(`Remove model "${name}" from nanobot Ollama? This cannot be undone.`)) return;
+    setError(null);
+    try {
+      await deleteWorkerOllamaModel(name);
+      load();
+    } catch (err: any) {
+      setError(err.message || "Failed to delete model on nanobot");
+    }
+  };
+
+  const handlePullWorker = async () => {
+    if (!pullNameWorker.trim()) return;
+    setPullingWorker(true);
+    setPullStatusWorker("Starting pull...");
+    setError(null);
+    try {
+      for await (const progress of streamWorkerOllamaPull(pullNameWorker.trim())) {
+        if (progress.status === "error") {
+          setError(progress.error || "Pull failed");
+          break;
+        }
+        if (progress.total && progress.completed) {
+          const pct = Math.round((progress.completed / progress.total) * 100);
+          setPullStatusWorker(`${progress.status} — ${pct}%`);
+        } else {
+          setPullStatusWorker(progress.status || "Pulling...");
+        }
+      }
+      setPullNameWorker("");
+      load();
+    } catch (err: any) {
+      setError(err.message || "Pull failed");
+    } finally {
+      setPullingWorker(false);
+      setPullStatusWorker("");
+    }
+  };
+
+  const handleSaveWorkerConnection = async () => {
+    setSavingWorkerSettings(true);
+    setError(null);
+    try {
+      const num = parseInt(workerNumCtxDraft, 10);
+      await putWorkerOllamaSettings({
+        base_url: workerBaseDraft.trim(),
+        ...(Number.isFinite(num) && num >= 512 ? { num_ctx: num } : {}),
+      });
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Failed to save nanobot Ollama settings");
+    } finally {
+      setSavingWorkerSettings(false);
+    }
+  };
+
   if (!data) return <p>Loading...</p>;
 
-  const configuredModel: string = data.configured_model || "";
-  const loadedNames: string[] = data.loaded_names || [];
-  const stats = data.inference_stats || {};
-  const contextWindow: number | null = data.context_window ?? null;
+  const backend = data.backend ?? data;
+  const worker = data.worker ?? {
+    ollama: { status: "unconfigured", error: "Upgrade backend", base_url: "" },
+    configured_model: "",
+    num_ctx: 8192,
+    models: [],
+    loaded_names: [],
+    context_window: null,
+    base_url: "",
+  };
+
+  const loadedNames: string[] = backend.loaded_names || [];
+  const stats = backend.inference_stats || {};
+  const contextWindow: number | null = backend.context_window ?? null;
   const contextUsed: number = (stats.prompt_tokens || 0) + (stats.completion_tokens || 0);
   const tokensPerSec: number | null = stats.tokens_per_sec ?? null;
 
@@ -719,15 +854,28 @@ function OllamaTab() {
 
   const activeModel = loadedNames.length > 0 ? loadedNames[0] : null;
 
+  const wLoadedNames: string[] = worker.loaded_names || [];
+  const wActive = wLoadedNames.length > 0 ? wLoadedNames[0] : null;
+  const wOllama = worker.ollama || {};
+  const wStatusLabel =
+    wOllama.status === "ok" ? "Connected"
+    : wOllama.status === "unconfigured" ? "Not configured"
+    : "Offline";
+
   return (
     <div>
       {error && (
         <div className="error-banner" style={{ marginBottom: "1rem" }}>{error}</div>
       )}
 
+      <h3 style={{ marginBottom: "0.75rem" }}>macmini (backend / chat)</h3>
+      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem" }}>
+        Ollama used by this server for Ask Me Anything, Workspace chat, and indexing. Base URL comes from server environment (<code style={{ fontSize: "0.75rem" }}>OLLAMA_BASE_URL</code>).
+      </p>
+
       <div className="stats-grid">
         <div className="stat-card">
-          <div className="stat-value">{data.ollama?.status === "ok" ? "Connected" : "Offline"}</div>
+          <div className="stat-value">{backend.ollama?.status === "ok" ? "Connected" : "Offline"}</div>
           <div className="stat-label">Ollama Status</div>
         </div>
         <div className="stat-card">
@@ -740,7 +888,6 @@ function OllamaTab() {
         </div>
       </div>
 
-      {/* Active model monitor */}
       <div style={{ margin: "1.5rem 0" }}>
         <h4 style={{ marginBottom: "0.5rem" }}>Active Model for Inference</h4>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", padding: "10px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px" }}>
@@ -760,7 +907,6 @@ function OllamaTab() {
         </div>
       </div>
 
-      {/* Suggestion model selector */}
       <div style={{ margin: "1.5rem 0" }}>
         <h4 style={{ marginBottom: "0.5rem" }}>Suggestion Generation Model</h4>
         <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", margin: "0 0 0.5rem" }}>
@@ -768,7 +914,7 @@ function OllamaTab() {
         </p>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
           <select
-            value={data.suggestion_model || ""}
+            value={backend.suggestion_model || ""}
             onChange={async (e) => {
               const name = e.target.value;
               if (!name) return;
@@ -776,7 +922,10 @@ function OllamaTab() {
               setError(null);
               try {
                 await setSuggestionModel(name);
-                setData((prev: any) => ({ ...prev, suggestion_model: name }));
+                setData((prev: any) => ({
+                  ...prev,
+                  backend: { ...(prev.backend ?? prev), suggestion_model: name },
+                }));
               } catch (err: any) {
                 setError(err.message || "Failed to set suggestion model");
               } finally {
@@ -793,7 +942,7 @@ function OllamaTab() {
               minWidth: "250px",
             }}
           >
-            {data.models?.map((m: any) => (
+            {backend.models?.map((m: any) => (
               <option key={m.name} value={m.name}>{m.name}</option>
             ))}
           </select>
@@ -803,10 +952,9 @@ function OllamaTab() {
         </div>
       </div>
 
-      {/* Pull new model */}
       <div style={{ margin: "1.5rem 0" }}>
         <h4 style={{ marginBottom: "0.5rem" }}>Pull Model</h4>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <input
             placeholder="e.g. llama3.2, mistral, gemma3"
             value={pullName}
@@ -824,14 +972,13 @@ function OllamaTab() {
         </div>
       </div>
 
-      {/* Model list with load/unload/remove buttons */}
-      {data.models?.length > 0 && (
+      {backend.models?.length > 0 && (
         <>
           <h4 style={{ marginBottom: "0.5rem" }}>Installed Models</h4>
           <table className="admin-table">
             <thead><tr><th>Model</th><th>Size</th><th>Modified</th><th>Status</th><th></th></tr></thead>
             <tbody>
-              {data.models.map((m: any) => {
+              {backend.models.map((m: any) => {
                 const isLoaded = loadedNames.includes(m.name);
                 const isCurrentlyLoading = loadingModel === m.name;
                 const isCurrentlyUnloading = unloadingModel === m.name;
@@ -878,6 +1025,169 @@ function OllamaTab() {
                       <button
                         className="btn btn-sm btn-danger"
                         onClick={() => handleDelete(m.name)}
+                        disabled={isLoaded}
+                        title={isLoaded ? "Unload the model first" : "Remove this model"}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </>
+      )}
+
+      <hr style={{ margin: "2rem 0", borderColor: "var(--border)" }} />
+
+      <h3 style={{ marginBottom: "0.75rem" }}>nanobot (Library worker)</h3>
+      <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: 0, marginBottom: "1rem" }}>
+        Ollama on the research worker host. Set the URL to a LAN address reachable from this backend (Docker publishes port 11434 on nanobot). Model and context are pushed to Redis so the worker picks them up on the next job without restarting containers.
+      </p>
+
+      <div style={{ margin: "1rem 0", padding: "12px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px" }}>
+        <h4 style={{ margin: "0 0 0.5rem" }}>Connection</h4>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", maxWidth: "520px" }}>
+          <label style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Base URL (http://nanobot-ip:11434)</label>
+          <input
+            value={workerBaseDraft}
+            onChange={(e) => setWorkerBaseDraft(e.target.value)}
+            placeholder="http://192.168.1.50:11434"
+            style={{ padding: "8px 12px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px" }}
+          />
+          <label style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>num_ctx (optional, min 512; saved with connection)</label>
+          <input
+            type="number"
+            min={512}
+            value={workerNumCtxDraft}
+            onChange={(e) => setWorkerNumCtxDraft(e.target.value)}
+            style={{ padding: "8px 12px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px", maxWidth: "200px" }}
+          />
+          <button
+            type="button"
+            className="btn btn-primary"
+            style={{ alignSelf: "flex-start", marginTop: "0.25rem" }}
+            disabled={savingWorkerSettings}
+            onClick={handleSaveWorkerConnection}
+          >
+            {savingWorkerSettings ? "Saving..." : "Save connection"}
+          </button>
+        </div>
+      </div>
+
+      <div className="stats-grid" style={{ marginTop: "1rem" }}>
+        <div className="stat-card">
+          <div className="stat-value">{wStatusLabel}</div>
+          <div className="stat-label">Ollama (nanobot)</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value" style={{ fontSize: "14px", wordBreak: "break-all" }}>
+            {worker.base_url || "—"}
+          </div>
+          <div className="stat-label">Resolved URL</div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-value">{worker.num_ctx ?? "—"}</div>
+          <div className="stat-label">Worker num_ctx</div>
+        </div>
+      </div>
+
+      <div style={{ margin: "1.5rem 0" }}>
+        <h4 style={{ marginBottom: "0.5rem" }}>Active Model (Library synthesis)</h4>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", padding: "10px 14px", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "6px" }}>
+          {loadingModelWorker ? (
+            <>
+              <span style={{ fontWeight: 600 }}>{loadingModelWorker}</span>
+              <span style={{ color: "#f59e0b", fontSize: "0.85rem" }}>Loading into memory...</span>
+            </>
+          ) : wActive ? (
+            <>
+              <span style={{ fontWeight: 600 }}>{wActive}</span>
+              <span style={{ color: "var(--success)", fontSize: "0.85rem" }}>Loaded</span>
+            </>
+          ) : (
+            <span style={{ color: "var(--text-muted)" }}>No model loaded</span>
+          )}
+          <span style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginLeft: "auto" }}>
+            configured: {worker.configured_model || "—"}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ margin: "1.5rem 0" }}>
+        <h4 style={{ marginBottom: "0.5rem" }}>Pull Model</h4>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            placeholder="e.g. gemma4:e4b"
+            value={pullNameWorker}
+            onChange={(e) => setPullNameWorker(e.target.value)}
+            disabled={pullingWorker}
+            onKeyDown={(e) => e.key === "Enter" && handlePullWorker()}
+            style={{ padding: "8px 12px", background: "var(--bg-card)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px", minWidth: "250px" }}
+          />
+          <button className="btn btn-primary" onClick={handlePullWorker} disabled={pullingWorker || !pullNameWorker.trim()}>
+            {pullingWorker ? "Pulling..." : "Pull"}
+          </button>
+          {pullStatusWorker && (
+            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>{pullStatusWorker}</span>
+          )}
+        </div>
+      </div>
+
+      {worker.models?.length > 0 && (
+        <>
+          <h4 style={{ marginBottom: "0.5rem" }}>Installed Models</h4>
+          <table className="admin-table">
+            <thead><tr><th>Model</th><th>Size</th><th>Modified</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {worker.models.map((m: any) => {
+                const isLoaded = wLoadedNames.includes(m.name);
+                const isCurrentlyLoading = loadingModelWorker === m.name;
+                const isCurrentlyUnloading = unloadingModelWorker === m.name;
+                return (
+                  <tr key={m.name}>
+                    <td style={{ fontWeight: isLoaded ? 600 : 400 }}>{m.name}</td>
+                    <td>{m.size ? `${(m.size / 1e9).toFixed(1)} GB` : "-"}</td>
+                    <td>{m.modified_at ? new Date(m.modified_at).toLocaleDateString() : "-"}</td>
+                    <td>
+                      {isCurrentlyLoading && (
+                        <span style={{ color: "#f59e0b", fontSize: "0.8rem" }}>loading...</span>
+                      )}
+                      {isCurrentlyUnloading && (
+                        <span style={{ color: "#f59e0b", fontSize: "0.8rem" }}>unloading...</span>
+                      )}
+                      {!isCurrentlyLoading && !isCurrentlyUnloading && isLoaded && (
+                        <span style={{ color: "var(--success)", fontSize: "0.8rem" }}>active</span>
+                      )}
+                      {!isCurrentlyLoading && !isCurrentlyUnloading && !isLoaded && (
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>idle</span>
+                      )}
+                    </td>
+                    <td style={{ display: "flex", gap: "0.4rem", justifyContent: "flex-end" }}>
+                      {!isLoaded && !isCurrentlyLoading && (
+                        <button
+                          className="btn btn-sm btn-primary"
+                          onClick={() => handleLoadWorker(m.name)}
+                          disabled={!!loadingModelWorker}
+                          title="Load into memory on nanobot"
+                        >
+                          Load
+                        </button>
+                      )}
+                      {isLoaded && !isCurrentlyUnloading && (
+                        <button
+                          className="btn btn-sm"
+                          onClick={() => handleUnloadWorker(m.name)}
+                          title="Unload from memory"
+                          style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text)" }}
+                        >
+                          Unload
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-sm btn-danger"
+                        onClick={() => handleDeleteWorker(m.name)}
                         disabled={isLoaded}
                         title={isLoaded ? "Unload the model first" : "Remove this model"}
                       >
@@ -1363,9 +1673,9 @@ function ConfigurationTab() {
     try {
       await updateAdminConfig({ system_rules: systemRulesDraft });
       setSystemRules(systemRulesDraft);
-      flash("Rules saved.");
+      flash("System rules saved.");
     } catch (e: any) {
-      setError(e.message || "Failed to save rules");
+      setError(e.message || "Failed to save system rules");
     } finally {
       setSaving(null);
     }
@@ -1608,12 +1918,12 @@ function ConfigurationTab() {
         )}
       </div>
 
-      {/* ── Default Rules (Your Documents only) ── */}
+      {/* ── System Rules (Your Documents only) ── */}
       <div style={sectionStyle}>
-        <h4 style={{ margin: "0 0 0.4rem" }}>Default Rules (Your Documents)</h4>
+        <h4 style={{ margin: "0 0 0.4rem" }}>System Rules (Your Documents)</h4>
         <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", margin: "0 0 0.75rem" }}>
-          Default rules appended to the Your Documents agent prompt. Users can override these
-          per-account from their documents page. Does not affect the AMA agent.
+          Extra instructions appended to the Your Documents agent system prompt for every user.
+          End users cannot change these from Workspace Settings. Does not affect the AMA agent.
         </p>
         <label style={labelStyle}>Rules / extra instructions</label>
         <textarea
@@ -1629,7 +1939,7 @@ function ConfigurationTab() {
             onClick={handleSaveRules}
             disabled={saving === "rules" || systemRulesDraft === systemRules}
           >
-            {saving === "rules" ? "Saving…" : "Save Rules"}
+            {saving === "rules" ? "Saving…" : "Save System Rules"}
           </button>
           {systemRules && (
             <button
@@ -1641,7 +1951,7 @@ function ConfigurationTab() {
                 try {
                   await updateAdminConfig({ system_rules: "" });
                   setSystemRules("");
-                  flash("Rules cleared.");
+                  flash("System rules cleared.");
                 } catch (e: any) {
                   setError(e.message);
                 } finally {
@@ -1650,7 +1960,7 @@ function ConfigurationTab() {
               }}
               disabled={saving === "rules"}
             >
-              Clear rules
+              Clear system rules
             </button>
           )}
         </div>

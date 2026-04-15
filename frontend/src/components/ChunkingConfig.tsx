@@ -5,9 +5,11 @@ interface Props {
   config: Config | null;
   onSave: (config: Partial<Config>) => Promise<void>;
   disabled?: boolean;
+  /** When true, shows a fixed heading and fields (Workspace Settings tab). */
+  alwaysExpanded?: boolean;
 }
 
-export function ChunkingConfig({ config, onSave, disabled }: Props) {
+export function ChunkingConfig({ config, onSave, disabled, alwaysExpanded }: Props) {
   const [open, setOpen] = useState(false);
   const [chunkSize, setChunkSize] = useState(300);
   const [overlap, setOverlap] = useState(50);
@@ -40,18 +42,24 @@ export function ChunkingConfig({ config, onSave, disabled }: Props) {
 
   const markDirty = () => setDirty(true);
 
-  return (
-    <div className="chunking-config">
-      <button
-        className="chunking-config-toggle"
-        onClick={() => setOpen(!open)}
-        type="button"
-      >
-        <span className={`chunking-chevron ${open ? "open" : ""}`}>&#9654;</span>
-        Chunking Settings
-      </button>
+  const expanded = alwaysExpanded || open;
 
-      <div className={`chunking-config-body ${open ? "open" : ""}`}>
+  return (
+    <div className={`chunking-config ${alwaysExpanded ? "chunking-config--static" : ""}`}>
+      {alwaysExpanded ? (
+        <h3 style={{ margin: 0 }}>Chunking Settings</h3>
+      ) : (
+        <button
+          className="chunking-config-toggle"
+          onClick={() => setOpen(!open)}
+          type="button"
+        >
+          <span className={`chunking-chevron ${open ? "open" : ""}`}>&#9654;</span>
+          Chunking Settings
+        </button>
+      )}
+
+      <div className={`chunking-config-body ${expanded ? "open" : ""}`}>
         <div className="config-field">
           <div className="config-field-header">
             <label>Chunk Size (tokens)</label>

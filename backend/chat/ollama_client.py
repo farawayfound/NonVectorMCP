@@ -91,25 +91,40 @@ def get_readiness_metrics() -> dict:
     return dict(_readiness_metrics)
 
 
+def _ollama_root(base_url: str) -> str:
+    return base_url.strip().rstrip("/")
+
+
+# ── Targeted Ollama HTTP (explicit base URL — Library worker / admin nanobot section) ──
+
+
+async def health_check_at_base(base_url: str) -> dict:
+    """Check if Ollama is reachable at *base_url* (host root, no /api path)."""
+    root = _ollama_root(base_url)
+    if not root:
+        return {"status": "unconfigured", "error": "No Ollama base URL configured", "base_url": ""}
+    try:
+        if _http_client is not None:
+            await _http_client.get(root, timeout=5.0)
+        else:
+            async with _ephemeral_client(timeout=5.0) as c:
+                await c.get(root)
+        return {"status": "ok", "base_url": root}
+    except Exception as e:
+        return {"status": "unreachable", "error": str(e), "base_url": root}
+
+
 async def health_check() -> dict:
     """Check if Ollama is reachable and return version info."""
     settings = get_settings()
-    url = settings.OLLAMA_BASE_URL.rstrip("/")
-    try:
-        if _http_client is not None:
-            await _http_client.get(url, timeout=5.0)
-        else:
-            async with _ephemeral_client(timeout=5.0) as c:
-                await c.get(url)
-        return {"status": "ok", "base_url": settings.OLLAMA_BASE_URL}
-    except Exception as e:
-        return {"status": "unreachable", "error": str(e), "base_url": settings.OLLAMA_BASE_URL}
+    return await health_check_at_base(settings.OLLAMA_BASE_URL)
 
 
-async def list_models() -> list[dict]:
-    """List locally available Ollama models."""
-    settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags"
+async def list_models_at_base(base_url: str) -> list[dict]:
+    root = _ollama_root(base_url)
+    if not root:
+        return []
+    url = f"{root}/api/tags"
     try:
         if _http_client is not None:
             resp = await _http_client.get(url, timeout=10.0)
@@ -119,14 +134,21 @@ async def list_models() -> list[dict]:
         resp.raise_for_status()
         return resp.json().get("models", [])
     except Exception as e:
-        logging.warning(f"ollama_client: failed to list models: {e}")
+        logging.warning("ollama_client: failed to list models at %s: %s", root, e)
         return []
 
 
-async def list_loaded_models() -> list[dict]:
-    """List models currently loaded in Ollama memory via /api/ps."""
+async def list_models() -> list[dict]:
+    """List locally available Ollama models."""
     settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/ps"
+    return await list_models_at_base(settings.OLLAMA_BASE_URL)
+
+
+async def list_loaded_models_at_base(base_url: str) -> list[dict]:
+    root = _ollama_root(base_url)
+    if not root:
+        return []
+    url = f"{root}/api/ps"
     try:
         if _http_client is not None:
             resp = await _http_client.get(url, timeout=5.0)
@@ -136,14 +158,21 @@ async def list_loaded_models() -> list[dict]:
         resp.raise_for_status()
         return resp.json().get("models", [])
     except Exception as e:
-        logging.warning(f"ollama_client: failed to list loaded models: {e}")
+        logging.warning("ollama_client: failed to list loaded models at %s: %s", root, e)
         return []
 
 
-async def get_model_context_window(name: str) -> int | None:
-    """Return the context window (num_ctx) for a model via /api/show."""
+async def list_loaded_models() -> list[dict]:
+    """List models currently loaded in Ollama memory via /api/ps."""
     settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/show"
+    return await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
+
+
+async def get_model_context_window_at_base(base_url: str, name: str) -> int | None:
+    root = _ollama_root(base_url)
+    if not root:
+        return None
+    url = f"{root}/api/show"
     try:
         if _http_client is not None:
             resp = await _http_client.post(url, json={"name": name}, timeout=10.0)
@@ -160,14 +189,21 @@ async def get_model_context_window(name: str) -> int | None:
             if len(parts) == 2 and parts[0].lower() == "num_ctx":
                 return int(parts[1])
     except Exception as e:
-        logging.warning(f"ollama_client: get_model_context_window failed for '{name}': {e}")
+        logging.warning("ollama_client: get_model_context_window failed for '%s' at %s: %s", name, root, e)
     return None
 
 
-async def pull_model(name: str) -> AsyncIterator[dict]:
-    """Pull a model from the Ollama registry, streaming progress updates."""
+async def get_model_context_window(name: str) -> int | None:
+    """Return the context window (num_ctx) for a model via /api/show."""
     settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/pull"
+    return await get_model_context_window_at_base(settings.OLLAMA_BASE_URL, name)
+
+
+async def pull_model_at_base(base_url: str, name: str) -> AsyncIterator[dict]:
+    root = _ollama_root(base_url)
+    if not root:
+        raise ValueError("No Ollama base URL configured")
+    url = f"{root}/api/pull"
     client = _http_client
     if client is None:
         async with httpx.AsyncClient(timeout=_default_stream_timeout()) as c:
@@ -192,10 +228,18 @@ async def pull_model(name: str) -> AsyncIterator[dict]:
                 continue
 
 
-async def delete_model(name: str) -> dict:
-    """Delete a model from Ollama."""
+async def pull_model(name: str) -> AsyncIterator[dict]:
+    """Pull a model from the Ollama registry, streaming progress updates."""
     settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/delete"
+    async for chunk in pull_model_at_base(settings.OLLAMA_BASE_URL, name):
+        yield chunk
+
+
+async def delete_model_at_base(base_url: str, name: str) -> dict:
+    root = _ollama_root(base_url)
+    if not root:
+        raise ValueError("No Ollama base URL configured")
+    url = f"{root}/api/delete"
     if _http_client is not None:
         resp = await _http_client.request("DELETE", url, json={"name": name}, timeout=10.0)
     else:
@@ -205,10 +249,17 @@ async def delete_model(name: str) -> dict:
     return {"status": "deleted", "name": name}
 
 
-async def unload_model(name: str) -> None:
-    """Immediately evict a model from Ollama memory (keep_alive=0)."""
+async def delete_model(name: str) -> dict:
+    """Delete a model from Ollama."""
     settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate"
+    return await delete_model_at_base(settings.OLLAMA_BASE_URL, name)
+
+
+async def unload_model_at_base(base_url: str, name: str) -> None:
+    root = _ollama_root(base_url)
+    if not root:
+        raise ValueError("No Ollama base URL configured")
+    url = f"{root}/api/generate"
     try:
         if _http_client is not None:
             await _http_client.post(
@@ -219,9 +270,15 @@ async def unload_model(name: str) -> None:
         else:
             async with _ephemeral_client(timeout=10.0) as c:
                 await c.post(url, json={"model": name, "keep_alive": 0, "stream": False})
-        logging.info(f"ollama_client: unloaded '{name}'")
+        logging.info("ollama_client: unloaded '%s' (base=%s)", name, root)
     except Exception as e:
-        logging.warning(f"ollama_client: unload failed for '{name}': {e}")
+        logging.warning("ollama_client: unload failed for '%s' at %s: %s", name, root, e)
+
+
+async def unload_model(name: str) -> None:
+    """Immediately evict a model from Ollama memory (keep_alive=0)."""
+    settings = get_settings()
+    await unload_model_at_base(settings.OLLAMA_BASE_URL, name)
 
 
 def _ollama_same_base_model(loaded_name: str, want: str) -> bool:
@@ -233,17 +290,13 @@ def _ollama_same_base_model(loaded_name: str, want: str) -> bool:
     return a == b
 
 
-async def preload_model(name: str, num_ctx: int | None = None) -> None:
-    """Load a model into memory with keep_alive=-1 (never auto-evict).
-
-    Pass ``num_ctx`` to force Ollama to allocate the KV cache for a specific
-    context window size on load.  If omitted, the current settings value is used.
-    """
-    settings = get_settings()
-    url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/generate"
-    t0 = time.monotonic()
-    ctx = num_ctx if num_ctx is not None else settings.OLLAMA_NUM_CTX
-    payload: dict = {"model": name, "keep_alive": -1, "stream": False, "options": {"num_ctx": ctx}}
+async def preload_model_at_base(base_url: str, name: str, num_ctx: int) -> bool:
+    """Load a model at *base_url* with keep_alive=-1. Returns True on HTTP success."""
+    root = _ollama_root(base_url)
+    if not root:
+        return False
+    url = f"{root}/api/generate"
+    payload: dict = {"model": name, "keep_alive": -1, "stream": False, "options": {"num_ctx": int(num_ctx)}}
     try:
         if _http_client is not None:
             resp = await _http_client.post(
@@ -257,14 +310,50 @@ async def preload_model(name: str, num_ctx: int | None = None) -> None:
             ) as c:
                 resp = await c.post(url, json=payload)
         resp.raise_for_status()
-        logging.info(f"ollama_client: preloaded '{name}' with num_ctx={ctx}")
-        _readiness_metrics["last_preload_ms"] = round((time.monotonic() - t0) * 1000)
+        logging.info("ollama_client: preloaded '%s' with num_ctx=%s at %s", name, num_ctx, root)
+        return True
+    except Exception as e:
+        logging.warning("ollama_client: preload failed for '%s' at %s: %s", name, root, e)
+        return False
+
+
+async def preload_model(name: str, num_ctx: int | None = None) -> None:
+    """Load a model into memory with keep_alive=-1 (never auto-evict).
+
+    Pass ``num_ctx`` to force Ollama to allocate the KV cache for a specific
+    context window size on load.  If omitted, the current settings value is used.
+    """
+    settings = get_settings()
+    ctx = num_ctx if num_ctx is not None else settings.OLLAMA_NUM_CTX
+    t0 = time.monotonic()
+    ok = await preload_model_at_base(settings.OLLAMA_BASE_URL, name, ctx)
+    _readiness_metrics["last_preload_ms"] = round((time.monotonic() - t0) * 1000)
+    if ok:
         _readiness_metrics["last_preload_at_utc"] = datetime.now(timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
+
+
+async def ensure_single_model_loaded_at_base(base_url: str, name: str, num_ctx: int) -> None:
+    """Single-model policy at an arbitrary Ollama base (no chat readiness telemetry)."""
+    if not str(name).strip():
+        return
+    try:
+        loaded = await list_loaded_models_at_base(base_url)
+        for m in loaded:
+            other = m.get("name", "")
+            if other and not _ollama_same_base_model(other, name):
+                logging.info("ollama_client: evicting '%s' (remote worker policy)", other)
+                await unload_model_at_base(base_url, other)
+        loaded = await list_loaded_models_at_base(base_url)
+        ok = any(
+            m.get("name") and _ollama_same_base_model(m.get("name", ""), name)
+            for m in loaded
+        )
+        if not ok:
+            await preload_model_at_base(base_url, name, num_ctx)
     except Exception as e:
-        _readiness_metrics["last_preload_ms"] = round((time.monotonic() - t0) * 1000)
-        logging.warning(f"ollama_client: preload failed for '{name}': {e}")
+        logging.warning("ollama_client: ensure_single_model_loaded_at_base failed: %s", e)
 
 
 async def ensure_single_model_loaded(name: str) -> None:
@@ -275,23 +364,24 @@ async def ensure_single_model_loaded(name: str) -> None:
         _readiness_metrics["last_ensure_ok"] = None
         _readiness_metrics["last_ensure_ms"] = round((time.monotonic() - t0) * 1000)
         return
+    settings = get_settings()
     ok = False
     try:
-        loaded = await list_loaded_models()
+        loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
         for m in loaded:
             other = m.get("name", "")
             if other and not _ollama_same_base_model(other, name):
-                logging.info(f"ollama_client: evicting '{other}' to enforce single-model policy")
-                await unload_model(other)
-        loaded = await list_loaded_models()
+                logging.info("ollama_client: evicting '%s' to enforce single-model policy", other)
+                await unload_model_at_base(settings.OLLAMA_BASE_URL, other)
+        loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
         for m in loaded:
             n = m.get("name", "")
             if n and _ollama_same_base_model(n, name):
                 ok = True
                 break
         if not ok:
-            await preload_model(name)
-            loaded = await list_loaded_models()
+            await preload_model_at_base(settings.OLLAMA_BASE_URL, name, settings.OLLAMA_NUM_CTX)
+            loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
             ok = any(
                 m.get("name") and _ollama_same_base_model(m.get("name", ""), name)
                 for m in loaded

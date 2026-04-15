@@ -33,7 +33,6 @@ export function Workspace() {
 
   // Agent config drafts
   const [promptDraft, setPromptDraft] = useState("");
-  const [rulesDraft, setRulesDraft] = useState("");
   const [agentSaving, setAgentSaving] = useState<string | null>(null);
   const [agentSuccess, setAgentSuccess] = useState<string | null>(null);
 
@@ -66,7 +65,6 @@ export function Workspace() {
   useEffect(() => {
     if (agentConfig) {
       setPromptDraft(agentConfig.system_prompt ?? "");
-      setRulesDraft(agentConfig.system_rules ?? "");
     }
   }, [agentConfig]);
 
@@ -146,18 +144,6 @@ export function Workspace() {
     }
   }, [saveAgentConfig, promptDraft]);
 
-  const handleSaveRules = useCallback(async () => {
-    setAgentSaving("rules");
-    try {
-      await saveAgentConfig({ system_rules: rulesDraft });
-      agentFlash("Rules saved.");
-    } catch {
-      // no-op
-    } finally {
-      setAgentSaving(null);
-    }
-  }, [saveAgentConfig, rulesDraft]);
-
   const handleSelectDoc = useCallback((filename: string) => {
     setSelectedDoc(filename);
     if (tab === "explore") {
@@ -215,9 +201,8 @@ export function Workspace() {
   };
 
   const defaultPrompt = agentConfig?.default_system_prompt || "";
-  const defaultRules = agentConfig?.default_system_rules || "";
+  const adminSystemRules = agentConfig?.default_system_rules || "";
   const savedPrompt = agentConfig?.system_prompt ?? "";
-  const savedRules = agentConfig?.system_rules ?? "";
 
   return (
     <div className="workspace-page">
@@ -380,16 +365,42 @@ export function Workspace() {
                 config={chunkingConfig}
                 onSave={saveConfig}
                 disabled={indexing}
+                alwaysExpanded
               />
 
               <h3>Agent Settings</h3>
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: "-0.3rem" }}>
-                Type in new values to replace the defaults.
+                Override the default system prompt below. System rules are set by an administrator only.
               </p>
 
               {agentSuccess && (
                 <div className="flash-success">{agentSuccess}</div>
               )}
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label className="settings-label">System rules</label>
+                <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 0.5rem" }}>
+                  These are defined in the admin configuration. They apply to every user and cannot be edited here.
+                </p>
+                {adminSystemRules ? (
+                  <textarea
+                    style={{
+                      ...textareaStyle,
+                      minHeight: 120,
+                      opacity: 0.92,
+                      cursor: "default",
+                    }}
+                    value={adminSystemRules}
+                    readOnly
+                    spellCheck={false}
+                    aria-readonly="true"
+                  />
+                ) : (
+                  <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>
+                    No additional system rules are configured.
+                  </p>
+                )}
+              </div>
 
               <div style={{ marginBottom: "1.25rem" }}>
                 <label className="settings-label">System Prompt</label>
@@ -423,43 +434,6 @@ export function Workspace() {
                       }}
                     >
                       Reset
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ marginBottom: "1.25rem" }}>
-                <label className="settings-label">Rules</label>
-                <textarea
-                  style={textareaStyle}
-                  value={rulesDraft}
-                  onChange={(e) => setRulesDraft(e.target.value)}
-                  placeholder={defaultRules || "No default rules set. Add custom rules here…"}
-                  spellCheck={false}
-                />
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleSaveRules}
-                    disabled={agentSaving === "rules" || rulesDraft === savedRules}
-                  >
-                    {agentSaving === "rules" ? "Saving…" : "Save"}
-                  </button>
-                  {savedRules && (
-                    <button
-                      className="btn btn-sm"
-                      onClick={async () => {
-                        setAgentSaving("rules");
-                        try {
-                          await saveAgentConfig({ system_rules: "" });
-                          setRulesDraft("");
-                          agentFlash("Rules cleared.");
-                        } catch { /* no-op */ } finally {
-                          setAgentSaving(null);
-                        }
-                      }}
-                    >
-                      Clear
                     </button>
                   )}
                 </div>
