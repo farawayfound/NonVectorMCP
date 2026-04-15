@@ -95,6 +95,11 @@ def _ollama_root(base_url: str) -> str:
     return base_url.strip().rstrip("/")
 
 
+def _ollama_ps_name(m: dict) -> str:
+    """Running-model row from ``/api/ps`` — prefer ``name``, fall back to ``model``."""
+    return str(m.get("name") or m.get("model") or "").strip()
+
+
 # ── Targeted Ollama HTTP (explicit base URL — Library worker / admin nanobot section) ──
 
 
@@ -341,13 +346,13 @@ async def ensure_single_model_loaded_at_base(base_url: str, name: str, num_ctx: 
     try:
         loaded = await list_loaded_models_at_base(base_url)
         for m in loaded:
-            other = m.get("name", "")
+            other = _ollama_ps_name(m)
             if other and not _ollama_same_base_model(other, name):
                 logging.info("ollama_client: evicting '%s' (remote worker policy)", other)
                 await unload_model_at_base(base_url, other)
         loaded = await list_loaded_models_at_base(base_url)
         ok = any(
-            m.get("name") and _ollama_same_base_model(m.get("name", ""), name)
+            _ollama_ps_name(m) and _ollama_same_base_model(_ollama_ps_name(m), name)
             for m in loaded
         )
         if not ok:
@@ -369,13 +374,13 @@ async def ensure_single_model_loaded(name: str) -> None:
     try:
         loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
         for m in loaded:
-            other = m.get("name", "")
+            other = _ollama_ps_name(m)
             if other and not _ollama_same_base_model(other, name):
                 logging.info("ollama_client: evicting '%s' to enforce single-model policy", other)
                 await unload_model_at_base(settings.OLLAMA_BASE_URL, other)
         loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
         for m in loaded:
-            n = m.get("name", "")
+            n = _ollama_ps_name(m)
             if n and _ollama_same_base_model(n, name):
                 ok = True
                 break
@@ -383,7 +388,7 @@ async def ensure_single_model_loaded(name: str) -> None:
             await preload_model_at_base(settings.OLLAMA_BASE_URL, name, settings.OLLAMA_NUM_CTX)
             loaded = await list_loaded_models_at_base(settings.OLLAMA_BASE_URL)
             ok = any(
-                m.get("name") and _ollama_same_base_model(m.get("name", ""), name)
+                _ollama_ps_name(m) and _ollama_same_base_model(_ollama_ps_name(m), name)
                 for m in loaded
             )
         _readiness_metrics["configured_model_in_memory"] = ok

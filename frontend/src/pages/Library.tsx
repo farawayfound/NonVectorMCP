@@ -8,6 +8,14 @@ import { getLibraryTask, getIndexEmailStatus, getLibraryConfig } from "../api/cl
 type View = "list" | "detail";
 
 const MAX_CONCURRENT_ACTIVE_TASKS = 2;
+/** Matches backend default cap until `/library/config` loads. */
+const DEFAULT_MAX_SOURCES_PER_JOB = 20;
+
+function defaultLibraryJobMaxSources(perJobCap: number) {
+  const cap = Math.max(1, perJobCap);
+  const half = Math.round(cap / 2);
+  return Math.max(1, Math.min(cap, half));
+}
 const OUTPUT_FORMAT_OPTIONS: { value: string; label: string; description: string }[] = [
   { value: "default", label: "Default", description: "Mixed report: intro, sections with bullets, comparison table(s), takeaways." },
   { value: "essay", label: "Essay", description: "Flowing prose essay — intro, body, conclusion. No bullets or tables." },
@@ -127,8 +135,11 @@ export function Library() {
 
   const [view, setView] = useState<View>("list");
   const [prompt, setPrompt] = useState("");
-  const [maxLibrarySources, setMaxLibrarySources] = useState(20);
-  const [maxSources, setMaxSources] = useState(5);
+  const [maxLibrarySources, setMaxLibrarySources] = useState(DEFAULT_MAX_SOURCES_PER_JOB);
+  const [maxSources, setMaxSources] = useState(() =>
+    defaultLibraryJobMaxSources(DEFAULT_MAX_SOURCES_PER_JOB),
+  );
+  const maxSourcesUserEdited = useRef(false);
   const [outputFormat, setOutputFormat] = useState<string>("default");
   const [showOptions, setShowOptions] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -153,7 +164,13 @@ export function Library() {
     getLibraryConfig()
       .then((cfg) => {
         setMaxLibrarySources(cfg.max_sources);
-        setMaxSources((n) => Math.min(cfg.max_sources, Math.max(1, n)));
+        const suggested = defaultLibraryJobMaxSources(cfg.max_sources);
+        setMaxSources((n) => {
+          if (maxSourcesUserEdited.current) {
+            return Math.min(cfg.max_sources, Math.max(1, n));
+          }
+          return suggested;
+        });
       })
       .catch(() => {/* keep defaults */});
   }, []);
@@ -368,6 +385,7 @@ export function Library() {
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (Number.isNaN(v)) return;
+                      maxSourcesUserEdited.current = true;
                       setMaxSources(Math.min(maxLibrarySources, Math.max(1, v)));
                     }}
                   />

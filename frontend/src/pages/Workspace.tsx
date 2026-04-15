@@ -201,7 +201,6 @@ export function Workspace() {
   };
 
   const defaultPrompt = agentConfig?.default_system_prompt || "";
-  const adminSystemRules = agentConfig?.default_system_rules || "";
   const savedPrompt = agentConfig?.system_prompt ?? "";
 
   return (
@@ -370,37 +369,12 @@ export function Workspace() {
 
               <h3>Agent Settings</h3>
               <p className="muted" style={{ fontSize: "0.78rem", marginTop: "-0.3rem" }}>
-                Override the default system prompt below. System rules are set by an administrator only.
+                Override the default system prompt below.
               </p>
 
               {agentSuccess && (
                 <div className="flash-success">{agentSuccess}</div>
               )}
-
-              <div style={{ marginBottom: "1.25rem" }}>
-                <label className="settings-label">System rules</label>
-                <p className="muted" style={{ fontSize: "0.78rem", margin: "0 0 0.5rem" }}>
-                  These are defined in the admin configuration. They apply to every user and cannot be edited here.
-                </p>
-                {adminSystemRules ? (
-                  <textarea
-                    style={{
-                      ...textareaStyle,
-                      minHeight: 120,
-                      opacity: 0.92,
-                      cursor: "default",
-                    }}
-                    value={adminSystemRules}
-                    readOnly
-                    spellCheck={false}
-                    aria-readonly="true"
-                  />
-                ) : (
-                  <p className="muted" style={{ fontSize: "0.82rem", margin: 0 }}>
-                    No additional system rules are configured.
-                  </p>
-                )}
-              </div>
 
               <div style={{ marginBottom: "1.25rem" }}>
                 <label className="settings-label">System Prompt</label>

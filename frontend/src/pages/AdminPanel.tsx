@@ -625,6 +625,8 @@ function OllamaTab() {
   const [savingWorkerSettings, setSavingWorkerSettings] = useState(false);
   const pollRefMac = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRefWorker = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** When true, do not overwrite URL/num_ctx drafts from polling GET /admin/ollama (avoids wiping in-progress edits). */
+  const workerConnDirty = useRef(false);
 
   const load = useCallback(async () => {
     const d = await getAdminOllama().catch(() => null);
@@ -642,12 +644,11 @@ function OllamaTab() {
   }, []);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data?.worker) return;
+    if (workerConnDirty.current) return;
     const w = data.worker;
-    if (w) {
-      setWorkerBaseDraft((w.base_url as string) || "");
-      setWorkerNumCtxDraft(String(w.num_ctx ?? ""));
-    }
+    setWorkerBaseDraft((w.base_url as string) || "");
+    setWorkerNumCtxDraft(String(w.num_ctx ?? ""));
   }, [data]);
 
   const startLoadingPollMac = (name: string) => {
@@ -821,6 +822,7 @@ function OllamaTab() {
         base_url: workerBaseDraft.trim(),
         ...(Number.isFinite(num) && num >= 512 ? { num_ctx: num } : {}),
       });
+      workerConnDirty.current = false;
       await load();
     } catch (err: any) {
       setError(err.message || "Failed to save nanobot Ollama settings");
@@ -1052,7 +1054,10 @@ function OllamaTab() {
           <label style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Base URL (http://nanobot-ip:11434)</label>
           <input
             value={workerBaseDraft}
-            onChange={(e) => setWorkerBaseDraft(e.target.value)}
+            onChange={(e) => {
+              workerConnDirty.current = true;
+              setWorkerBaseDraft(e.target.value);
+            }}
             placeholder="http://192.168.1.50:11434"
             style={{ padding: "8px 12px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px" }}
           />
@@ -1061,7 +1066,10 @@ function OllamaTab() {
             type="number"
             min={512}
             value={workerNumCtxDraft}
-            onChange={(e) => setWorkerNumCtxDraft(e.target.value)}
+            onChange={(e) => {
+              workerConnDirty.current = true;
+              setWorkerNumCtxDraft(e.target.value);
+            }}
             style={{ padding: "8px 12px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px", maxWidth: "200px" }}
           />
           <button

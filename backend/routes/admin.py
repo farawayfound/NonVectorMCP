@@ -2,6 +2,7 @@
 """Admin routes — invite codes, activity log, system stats, demo KB management."""
 import json
 import logging
+import time
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -46,6 +47,18 @@ ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".pptx", ".csv"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
 
+def _agent_debug_ndjson(payload: dict) -> None:
+    # region agent log
+    try:
+        p = Path(__file__).resolve().parents[2] / "debug-c5b9ef.log"
+        row = {**payload, "sessionId": "c5b9ef", "timestamp": int(time.time() * 1000)}
+        with p.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(row, default=str) + "\n")
+    except Exception:
+        pass
+    # endregion
+
+
 def _validate_worker_ollama_base_url(url: str) -> str:
     u = (url or "").strip().rstrip("/")
     if not u:
@@ -60,6 +73,12 @@ async def _worker_ollama_snapshot() -> dict:
     settings = get_settings()
     base = settings.resolved_worker_ollama_base_url()
     if not base:
+        _agent_debug_ndjson({
+            "hypothesisId": "H1",
+            "location": "admin.py:_worker_ollama_snapshot",
+            "message": "worker snapshot unconfigured",
+            "data": {"base_len": 0, "persisted_base_len": len((settings.WORKER_OLLAMA_BASE_URL or "").strip())},
+        })
         return {
             "ollama": {
                 "status": "unconfigured",
@@ -77,8 +96,24 @@ async def _worker_ollama_snapshot() -> dict:
     status = await health_check_at_base(base)
     models = await list_models_at_base(base)
     loaded = await list_loaded_models_at_base(base)
-    loaded_names = [m.get("name", "") for m in loaded]
+    loaded_names = [
+        str(m.get("name") or m.get("model") or "").strip()
+        for m in loaded
+    ]
     context_window = await get_model_context_window_at_base(base, settings.WORKER_OLLAMA_MODEL)
+    _agent_debug_ndjson({
+        "hypothesisId": "H3_H4",
+        "location": "admin.py:_worker_ollama_snapshot",
+        "message": "worker snapshot ok",
+        "data": {
+            "base_len": len(base),
+            "ollama_status": status.get("status"),
+            "models_n": len(models),
+            "loaded_n": len(loaded),
+            "loaded_names_nonempty": sum(1 for n in loaded_names if n),
+            "first_loaded_keys": list(loaded[0].keys()) if loaded else [],
+        },
+    })
     return {
         "ollama": status,
         "configured_model": settings.WORKER_OLLAMA_MODEL,
@@ -422,7 +457,7 @@ async def admin_ollama(request: Request, user: dict = Depends(require_admin)):
     models = await list_models()
     loaded = await list_loaded_models()
     settings = get_settings()
-    loaded_names = [m.get("name", "") for m in loaded]
+    loaded_names = [str(m.get("name") or m.get("model") or "").strip() for m in loaded]
     context_window = await get_model_context_window(settings.OLLAMA_MODEL)
     backend = {
         "ollama": status,
@@ -633,6 +668,13 @@ async def admin_worker_ollama_pull(request: Request, user: dict = Depends(requir
     name = body.get("name", "").strip()
     if not name:
         raise HTTPException(400, "Model name is required")
+    rb = get_settings().resolved_worker_ollama_base_url()
+    _agent_debug_ndjson({
+        "hypothesisId": "H1_H2",
+        "location": "admin.py:admin_worker_ollama_pull",
+        "message": "worker pull before base check",
+        "data": {"model": name, "resolved_base_len": len(rb)},
+    })
     base = _worker_ollama_base_or_400()
     log_event("worker_ollama_pull_start", user_id=user["user_id"], model=name)
 

@@ -241,7 +241,38 @@ async function* streamOllamaPullPath(path: string, name: string): AsyncGenerator
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name }),
   });
-  if (!res.ok) throw new Error("Pull request failed");
+  if (!res.ok) {
+    let detail = res.statusText || `HTTP ${res.status}`;
+    try {
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const j = await res.json();
+        if (j?.detail !== undefined) {
+          detail = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+        }
+      } else {
+        const t = (await res.text()).slice(0, 500);
+        if (t) detail = t;
+      }
+    } catch {
+      /* keep detail */
+    }
+    // #region agent log
+    fetch("http://127.0.0.1:7517/ingest/bd8fe758-d961-4288-a376-8a2704de8add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5b9ef" },
+      body: JSON.stringify({
+        sessionId: "c5b9ef",
+        hypothesisId: "H2",
+        location: "client.ts:streamOllamaPullPath",
+        message: "ollama pull non-ok",
+        data: { path, status: res.status, detailPreview: (detail || "").slice(0, 300) },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw new Error(detail || "Pull request failed");
+  }
   const reader = res.body?.getReader();
   if (!reader) return;
   const decoder = new TextDecoder();
