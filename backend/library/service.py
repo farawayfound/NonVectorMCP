@@ -16,7 +16,6 @@ from backend.storage import get_user_upload_dir, get_user_index_dir
 
 log = logging.getLogger(__name__)
 
-MAX_LIBRARY_SOURCES = 20
 MAX_CONCURRENT_ACTIVE_TASKS = 2
 _ACTIVE_STATUSES = (TaskStatus.QUEUED, TaskStatus.CRAWLING, TaskStatus.SYNTHESIZING)
 CANCELLED_RETENTION_MINUTES = 5
@@ -58,6 +57,20 @@ async def count_active_research_tasks(user_id: str) -> int:
         await db.close()
 
 
+async def count_total_research_tasks(user_id: str) -> int:
+    """All tasks belonging to this user (any status)."""
+    db = await get_db()
+    try:
+        cursor = await db.execute(
+            "SELECT COUNT(*) AS c FROM library_tasks WHERE user_id = ?",
+            (user_id,),
+        )
+        row = await cursor.fetchone()
+        return int(dict(row)["c"])
+    finally:
+        await db.close()
+
+
 async def submit_research(
     user_id: str,
     prompt: str,
@@ -74,8 +87,10 @@ async def submit_research(
     if len(prompt) > 2000:
         raise ValueError("prompt must be <=2000 characters")
 
-    if max_sources < 1 or max_sources > MAX_LIBRARY_SOURCES:
-        raise ValueError(f"max_sources must be between 1 and {MAX_LIBRARY_SOURCES}")
+    settings = get_settings()
+    max_allowed_sources = settings.MAX_LIBRARY_SOURCES
+    if max_sources < 1 or max_sources > max_allowed_sources:
+        raise ValueError(f"max_sources must be between 1 and {max_allowed_sources}")
 
     if target_tokens is None:
         target_tokens = default_target_tokens(max_sources)
@@ -87,6 +102,13 @@ async def submit_research(
     fmt = (output_format or "default").strip().lower()
     if fmt not in OUTPUT_FORMATS:
         raise ValueError(f"output_format must be one of: {', '.join(OUTPUT_FORMATS)}")
+
+    total = await count_total_research_tasks(user_id)
+    if total >= settings.MAX_LIBRARY_ARTICLES:
+        raise ValueError(
+            f"you have reached the maximum of {settings.MAX_LIBRARY_ARTICLES} research articles; "
+            "delete some before submitting a new one"
+        )
 
     active = await count_active_research_tasks(user_id)
     if active >= MAX_CONCURRENT_ACTIVE_TASKS:

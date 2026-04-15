@@ -121,6 +121,10 @@ class Settings:
         self.REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
         self.NANOBOT_API_KEY = os.getenv("NANOBOT_API_KEY", "")
         self.LIBRARY_ARTIFACTS_DIR = self.DATA_DIR / "library"
+        # Max web sources scraped per research job (admin-configurable, 1–99, default 20).
+        self.MAX_LIBRARY_SOURCES = int(os.getenv("MAX_LIBRARY_SOURCES", "20"))
+        # Max total research reports a user can accumulate (admin-configurable, 1–99, default 50).
+        self.MAX_LIBRARY_ARTICLES = int(os.getenv("MAX_LIBRARY_ARTICLES", "50"))
 
         # ── Runtime admin overrides (mutable; persisted to DATA_DIR/admin_config.json) ──
         # These are set/updated via the admin Configuration tab at runtime.
@@ -158,6 +162,10 @@ class Settings:
                 self.INDEX_SANITIZE_WORKSPACE = bool(data["index_sanitize_workspace"])
             if "index_sanitize_ama_kb" in data:
                 self.INDEX_SANITIZE_AMA_KB = bool(data["index_sanitize_ama_kb"])
+            if data.get("max_library_sources"):
+                self.MAX_LIBRARY_SOURCES = max(1, min(99, int(data["max_library_sources"])))
+            if data.get("max_library_articles"):
+                self.MAX_LIBRARY_ARTICLES = max(1, min(99, int(data["max_library_articles"])))
         except Exception:
             pass
 
@@ -175,6 +183,8 @@ class Settings:
             "index_sanitize_ama_kb": self.INDEX_SANITIZE_AMA_KB,
             "suggestion_model": self.SUGGESTION_MODEL,
             "ollama_model": self.OLLAMA_MODEL,
+            "max_library_sources": self.MAX_LIBRARY_SOURCES,
+            "max_library_articles": self.MAX_LIBRARY_ARTICLES,
         }
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 

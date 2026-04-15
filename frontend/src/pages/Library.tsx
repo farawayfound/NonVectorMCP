@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useState, type ComponentPropsWithoutRe
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useLibrary, type LibraryTask } from "../hooks/useLibrary";
-import { getLibraryTask, getIndexEmailStatus } from "../api/client";
+import { getLibraryTask, getIndexEmailStatus, getLibraryConfig } from "../api/client";
 
 type View = "list" | "detail";
 
-const MAX_LIBRARY_SOURCES = 20;
 const MAX_CONCURRENT_ACTIVE_TASKS = 2;
 const OUTPUT_FORMAT_OPTIONS: { value: string; label: string; description: string }[] = [
   { value: "default", label: "Default", description: "Mixed report: intro, sections with bullets, comparison table(s), takeaways." },
@@ -76,6 +75,7 @@ export function Library() {
 
   const [view, setView] = useState<View>("list");
   const [prompt, setPrompt] = useState("");
+  const [maxLibrarySources, setMaxLibrarySources] = useState(20);
   const [maxSources, setMaxSources] = useState(5);
   const [outputFormat, setOutputFormat] = useState<string>("default");
   const [showOptions, setShowOptions] = useState(false);
@@ -98,7 +98,12 @@ export function Library() {
   useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
-    setMaxSources((n) => Math.min(MAX_LIBRARY_SOURCES, Math.max(1, n)));
+    getLibraryConfig()
+      .then((cfg) => {
+        setMaxLibrarySources(cfg.max_sources);
+        setMaxSources((n) => Math.min(cfg.max_sources, Math.max(1, n)));
+      })
+      .catch(() => {/* keep defaults */});
   }, []);
 
 
@@ -302,16 +307,16 @@ export function Library() {
             {showOptions && (
               <div className="library-options-body">
                 <label>
-                  Max sources (1–{MAX_LIBRARY_SOURCES}):
+                  Max sources (1–{maxLibrarySources}):
                   <input
                     type="number"
                     min={1}
-                    max={MAX_LIBRARY_SOURCES}
+                    max={maxLibrarySources}
                     value={maxSources}
                     onChange={(e) => {
                       const v = Number(e.target.value);
                       if (Number.isNaN(v)) return;
-                      setMaxSources(Math.min(MAX_LIBRARY_SOURCES, Math.max(1, v)));
+                      setMaxSources(Math.min(maxLibrarySources, Math.max(1, v)));
                     }}
                   />
                 </label>

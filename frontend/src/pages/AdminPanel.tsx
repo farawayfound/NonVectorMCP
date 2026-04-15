@@ -1266,6 +1266,12 @@ function ConfigurationTab() {
   const [indexSanitizeWorkspace, setIndexSanitizeWorkspace] = useState(true);
   const [indexSanitizeAmaKb, setIndexSanitizeAmaKb] = useState(true);
 
+  // Library limits
+  const [maxLibrarySources, setMaxLibrarySources] = useState(20);
+  const [maxLibrarySourcesInput, setMaxLibrarySourcesInput] = useState("20");
+  const [maxLibraryArticles, setMaxLibraryArticles] = useState(50);
+  const [maxLibraryArticlesInput, setMaxLibraryArticlesInput] = useState("50");
+
   const load = useCallback(() => {
     setLoading(true);
     getAdminConfig()
@@ -1278,6 +1284,12 @@ function ConfigurationTab() {
         setSystemRulesDraft(d.system_rules ?? "");
         setIndexSanitizeWorkspace(d.index_sanitize_workspace !== false);
         setIndexSanitizeAmaKb(d.index_sanitize_ama_kb !== false);
+        const mls = d.max_library_sources ?? 20;
+        setMaxLibrarySources(mls);
+        setMaxLibrarySourcesInput(String(mls));
+        const mla = d.max_library_articles ?? 50;
+        setMaxLibraryArticles(mla);
+        setMaxLibraryArticlesInput(String(mla));
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -1359,6 +1371,33 @@ function ConfigurationTab() {
     }
   };
 
+  const handleSaveLibraryLimits = async () => {
+    const sources = parseInt(maxLibrarySourcesInput, 10);
+    const articles = parseInt(maxLibraryArticlesInput, 10);
+    if (isNaN(sources) || sources < 1 || sources > 99) {
+      setError("Max sources must be between 1 and 99.");
+      return;
+    }
+    if (isNaN(articles) || articles < 1 || articles > 99) {
+      setError("Max articles must be between 1 and 99.");
+      return;
+    }
+    setError(null);
+    setSaving("library_limits");
+    try {
+      const res = await updateAdminConfig({ max_library_sources: sources, max_library_articles: articles });
+      setMaxLibrarySources(res.max_library_sources);
+      setMaxLibrarySourcesInput(String(res.max_library_sources));
+      setMaxLibraryArticles(res.max_library_articles);
+      setMaxLibraryArticlesInput(String(res.max_library_articles));
+      flash("Library limits saved.");
+    } catch (e: any) {
+      setError(e.message || "Failed to save library limits");
+    } finally {
+      setSaving(null);
+    }
+  };
+
   const sectionStyle: React.CSSProperties = {
     padding: "1.25rem 1.5rem",
     background: "var(--bg-card)",
@@ -1422,6 +1461,61 @@ function ConfigurationTab() {
         setError={setError}
         flash={flash}
       />
+
+      {/* ── Library Limits ── */}
+      <div style={sectionStyle}>
+        <h4 style={{ margin: "0 0 0.75rem" }}>Library Limits</h4>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", margin: "0 0 1rem" }}>
+          Caps for the research Library. <strong>Max sources</strong> sets the ceiling users can
+          request per research job (1–99). <strong>Max articles</strong> limits how many research
+          reports a user can accumulate before they must delete some (1–99).
+        </p>
+        <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
+          <div>
+            <label style={labelStyle}>Max Sources per Job</label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={maxLibrarySourcesInput}
+                onChange={(e) => setMaxLibrarySourcesInput(e.target.value)}
+                style={{ width: 80, padding: "7px 10px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px" }}
+              />
+              <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                current: <strong>{maxLibrarySources}</strong>
+              </span>
+            </div>
+          </div>
+          <div>
+            <label style={labelStyle}>Max Research Articles</label>
+            <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <input
+                type="number"
+                min={1}
+                max={99}
+                value={maxLibraryArticlesInput}
+                onChange={(e) => setMaxLibraryArticlesInput(e.target.value)}
+                style={{ width: 80, padding: "7px 10px", background: "var(--bg)", color: "var(--text)", border: "1px solid var(--border)", borderRadius: "6px" }}
+              />
+              <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                current: <strong>{maxLibraryArticles}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          className="btn btn-primary"
+          onClick={handleSaveLibraryLimits}
+          disabled={
+            saving === "library_limits" ||
+            (maxLibrarySourcesInput === String(maxLibrarySources) &&
+              maxLibraryArticlesInput === String(maxLibraryArticles))
+          }
+        >
+          {saving === "library_limits" ? "Saving…" : "Save Limits"}
+        </button>
+      </div>
 
       {/* ── Context Window ── */}
       <div style={sectionStyle}>

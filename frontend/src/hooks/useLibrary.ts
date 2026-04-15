@@ -80,25 +80,29 @@ export function useLibrary() {
   const importSelected = useCallback(async (ids: string[]) => {
     if (ids.length === 0) return { results: [] as any[] };
     setError(null);
-    const settled = await Promise.allSettled(ids.map((id) => approveLibraryTask(id)));
+    // Sequential imports to avoid concurrent SQLite writes and index-file race conditions.
+    const results: { id: string; ok: boolean; value: any; error: string | null }[] = [];
+    let failCount = 0;
+    let firstError: string | null = null;
+    for (const id of ids) {
+      try {
+        const value = await approveLibraryTask(id);
+        results.push({ id, ok: true, value, error: null });
+      } catch (e: any) {
+        failCount++;
+        if (!firstError) firstError = e?.message || "Could not import task";
+        results.push({ id, ok: false, value: null, error: e?.message || null });
+      }
+    }
     await refresh();
-    const failed = settled.filter((r) => r.status === "rejected");
-    if (failed.length > 0) {
-      const first = failed[0] as PromiseRejectedResult;
+    if (failCount > 0) {
       setError(
-        failed.length === ids.length
-          ? first.reason?.message || "Could not import tasks"
-          : `${failed.length} of ${ids.length} tasks could not be imported`,
+        failCount === ids.length
+          ? firstError || "Could not import tasks"
+          : `${failCount} of ${ids.length} tasks could not be imported`,
       );
     }
-    return {
-      results: settled.map((r, i) => ({
-        id: ids[i],
-        ok: r.status === "fulfilled",
-        value: r.status === "fulfilled" ? r.value : null,
-        error: r.status === "rejected" ? (r as PromiseRejectedResult).reason?.message : null,
-      })),
-    };
+    return { results };
   }, [refresh]);
 
   const deleteSelected = useCallback(async (ids: string[]) => {

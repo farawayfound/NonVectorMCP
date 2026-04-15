@@ -563,6 +563,8 @@ async def admin_get_config(request: Request, user: dict = Depends(require_admin)
         "index_sanitize_workspace": settings.INDEX_SANITIZE_WORKSPACE,
         "index_sanitize_ama_kb": settings.INDEX_SANITIZE_AMA_KB,
         "model": settings.OLLAMA_MODEL,
+        "max_library_sources": settings.MAX_LIBRARY_SOURCES,
+        "max_library_articles": settings.MAX_LIBRARY_ARTICLES,
     }
 
 
@@ -623,6 +625,16 @@ async def admin_update_config(
         settings.INDEX_SANITIZE_AMA_KB = bool(body["index_sanitize_ama_kb"])
         changed.append("index_sanitize_ama_kb")
 
+    if "max_library_sources" in body:
+        val = max(1, min(99, int(body["max_library_sources"])))
+        settings.MAX_LIBRARY_SOURCES = val
+        changed.append("max_library_sources")
+
+    if "max_library_articles" in body:
+        val = max(1, min(99, int(body["max_library_articles"])))
+        settings.MAX_LIBRARY_ARTICLES = val
+        changed.append("max_library_articles")
+
     if changed:
         settings.save_admin_config()
         log_event("admin_config_updated", user_id=user["user_id"], changed=",".join(changed))
@@ -642,6 +654,8 @@ async def admin_update_config(
         "ama_system_rules": settings.AMA_SYSTEM_RULES_OVERRIDE or "",
         "index_sanitize_workspace": settings.INDEX_SANITIZE_WORKSPACE,
         "index_sanitize_ama_kb": settings.INDEX_SANITIZE_AMA_KB,
+        "max_library_sources": settings.MAX_LIBRARY_SOURCES,
+        "max_library_articles": settings.MAX_LIBRARY_ARTICLES,
         "reloading": reload_model,
     }
 

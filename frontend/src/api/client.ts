@@ -321,6 +321,8 @@ export const cancelAdminLibraryTask = (id: string) =>
   request<any>(`/admin/library/tasks/${encodeURIComponent(id)}/cancel`, { method: "POST" });
 
 // Library — distributed research
+export const getLibraryConfig = () =>
+  request<{ max_sources: number; max_articles: number }>("/library/config");
 export const submitResearch = (prompt: string, options?: Record<string, unknown>) =>
   request<any>("/library/research", {
     method: "POST",

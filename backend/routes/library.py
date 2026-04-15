@@ -24,6 +24,20 @@ _SSE_TERMINAL = frozenset({"review", "failed", "cancelled", "approved", "rejecte
 
 
 # ---------------------------------------------------------------------------
+# User-facing config (limits the UI needs to know about)
+# ---------------------------------------------------------------------------
+
+@router.get("/config")
+async def get_library_config(user: dict = Depends(require_auth)):
+    """Return the current per-user limits for the Library feature."""
+    settings = get_settings()
+    return {
+        "max_sources": settings.MAX_LIBRARY_SOURCES,
+        "max_articles": settings.MAX_LIBRARY_ARTICLES,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Submit a new research task
 # ---------------------------------------------------------------------------
 
