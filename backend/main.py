@@ -20,7 +20,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from backend.config import get_settings
 from backend.database import init_db_sync
 from backend.logger import log_event, set_session
-from backend.chat.ollama_client import init_ollama_http, close_ollama_http, ensure_single_model_loaded
+from backend.chat.ollama_client import (
+    init_ollama_http,
+    close_ollama_http,
+    ensure_single_model_loaded,
+    ensure_single_model_loaded_at_base,
+)
 
 
 class AccessLogMiddleware(BaseHTTPMiddleware):
@@ -155,6 +160,26 @@ async def _session_cleanup() -> None:
         await asyncio.sleep(300)  # run every 5 minutes
 
 
+async def _reconcile_library_tasks() -> None:
+    """Periodically reconcile library tasks stuck in active states.
+
+    If the browser SSE connection was closed before the worker published its
+    terminal status (failed / review), the DB row is never updated.  This loop
+    reads the Redis status stream for all active tasks every 30 s and promotes
+    them to the correct terminal state so the UI always shows the real outcome.
+    """
+    from backend.library.service import reconcile_active_tasks
+    await asyncio.sleep(15)  # let startup finish before first run
+    while True:
+        try:
+            await reconcile_active_tasks()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logging.debug("library reconcile loop: %s", exc)
+        await asyncio.sleep(30)
+
+
 async def _model_keepalive() -> None:
     """Keep the configured Ollama model warm.
 
@@ -251,12 +276,16 @@ async def lifespan(app: FastAPI):
     keepalive_task = asyncio.create_task(_model_keepalive())
     # Periodically clean up expired/inactive sessions and their user data
     cleanup_task = asyncio.create_task(_session_cleanup())
+    # Reconcile library tasks whose SSE subscriber was closed before the worker
+    # published a terminal status — surfaces failures even without a live browser.
+    reconcile_task = asyncio.create_task(_reconcile_library_tasks())
     yield
     keepalive_task.cancel()
     cleanup_task.cancel()
+    reconcile_task.cancel()
     if redis_reconnect_task is not None:
         redis_reconnect_task.cancel()
-    for task in (keepalive_task, cleanup_task, redis_reconnect_task):
+    for task in (keepalive_task, cleanup_task, reconcile_task, redis_reconnect_task):
         if task is None:
             continue
         try:

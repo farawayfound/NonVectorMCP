@@ -595,14 +595,14 @@ def _worker_ollama_base_or_400() -> str:
 
 @router.put("/ollama/worker/settings")
 async def admin_worker_ollama_settings(request: Request, user: dict = Depends(require_admin)):
-    """Persist nanobot Ollama LAN URL only. Library worker model is fixed (gemma4:26b, 32k)."""
+    """Persist nanobot Ollama LAN URL only. Library worker model is fixed (gemma4:26b, 64k)."""
     body = await request.json()
     settings = get_settings()
     changed = False
     if "base_url" in body:
         settings.WORKER_OLLAMA_BASE_URL = _validate_worker_ollama_base_url(body.get("base_url", "") or "")
         changed = True
-    # ``model`` / ``num_ctx`` in the body are ignored — worker uses static gemma4:26b @ 32k.
+    # ``model`` / ``num_ctx`` in the body are ignored — worker uses static gemma4:26b @ 64k.
     if changed:
         settings.save_admin_config()
         log_event("worker_ollama_settings_changed", user_id=user["user_id"])
@@ -618,7 +618,7 @@ async def admin_worker_ollama_settings(request: Request, user: dict = Depends(re
         "num_ctx": settings.WORKER_OLLAMA_NUM_CTX,
         "model": settings.WORKER_OLLAMA_MODEL,
         "connection_test": conn_test,
-        "note": "Library worker model is fixed to gemma4:26b with num_ctx=32000 (not configurable here).",
+        "note": f"Library worker model is fixed to gemma4:26b with num_ctx={settings.WORKER_OLLAMA_NUM_CTX} (not configurable here).",
     }
 
 
@@ -628,7 +628,7 @@ async def admin_worker_ollama_set_model(
     background_tasks: BackgroundTasks,
     user: dict = Depends(require_admin),
 ):
-    """Warm the fixed Library worker model (gemma4:26b @ 32k) on nanobot."""
+    """Warm the fixed Library worker model (gemma4:26b @ 64k) on nanobot."""
     body = await request.json()
     _ = body  # optional ``name`` ignored — model is not switchable
     base = _worker_ollama_base_or_400()

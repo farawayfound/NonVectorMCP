@@ -226,7 +226,7 @@ Symptoms: you know **`~/chunkylink`** is on the latest commit and **`npm run bui
 1. **`git fetch`** then either **`git pull --ff-only`** or, with **`DEPLOY_RESET_HARD=1`**, **`git reset --hard`** to match the remote (see [§ 2](#2-deploy-on-the-linux-server-nanobot)).
 2. **`pip install -r requirements.txt`** using `/srv/chunkylink/venv/bin/pip`.
 3. **`npm ci`** and **`npm run build`** in `frontend/` when Node is available via the invoking user’s nvm (`SUDO_USER`), unless **`DEPLOY_SKIP_NPM=1`**.
-4. Force-align nanobot worker/runtime model settings to **`gemma4:26b`** + **`32000`** in **`.env`**, **`.env.nanobot`**, and (when present) **`data/admin_config.json`**.
+4. Force-align nanobot worker/runtime model settings to **`gemma4:26b`** + **`65536`** (64k) in **`.env`**, **`.env.nanobot`**, and (when present) **`data/admin_config.json`**.
 5. **`chown -R chunkylink:chunkylink`** on the repo.
 6. **`systemctl restart chunkylink`** and report whether the unit is **active**.
 
@@ -325,5 +325,5 @@ If you prefer not to migrate an existing tree, you can clone into a new director
 |--------|---------|
 | `scripts/init_chunkylink_git_on_server.sh` | One-time Git init + `.gitignore` + initial commit + `chown` |
 | `scripts/link_chunkylink_git_remote.sh` | Set **`origin`** URL (argument: remote URL) |
-| `scripts/deploy_chunkylink.sh` | Pull (or reset with **`DEPLOY_RESET_HARD=1`**), dependencies, optional frontend build, align worker/runtime Ollama to **`gemma4:26b`** + **`32000`**, `chown`, **`systemctl restart chunkylink`** — on **nanobot**, prefer **`DEPLOY_RESET_HARD=1`** ([§ 2](#2-deploy-on-the-linux-server-nanobot)). |
+| `scripts/deploy_chunkylink.sh` | Pull (or reset with **`DEPLOY_RESET_HARD=1`**), dependencies, optional frontend build, align worker/runtime Ollama to **`gemma4:26b`** + **`65536`** (64k), `chown`, **`systemctl restart chunkylink`** — on **nanobot**, prefer **`DEPLOY_RESET_HARD=1`** ([§ 2](#2-deploy-on-the-linux-server-nanobot)). |
 | `scripts/Deploy-Nanobot.ps1` | Windows: SSH trigger for **`deploy_chunkylink.sh`** |

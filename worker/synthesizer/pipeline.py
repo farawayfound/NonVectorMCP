@@ -31,8 +31,7 @@ async def run_pipeline(
     Returns dict with keys: markdown, sources, summary.
 
     Model/context config is read from ``config.OLLAMA_MODEL`` /
-    ``config.OLLAMA_NUM_CTX``, which the worker main loop syncs from Redis
-    (backend Settings) before each job.
+    ``config.OLLAMA_NUM_CTX`` (default 64k / 65536; override via ``OLLAMA_NUM_CTX`` in ``.env.nanobot``).
     """
 
     async def _status(status: str, msg: str, progress: float = 0.0, sources: int = 0):

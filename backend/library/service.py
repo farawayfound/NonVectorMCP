@@ -606,6 +606,63 @@ def _is_failed_status(status: object) -> bool:
     return str(status or "").strip().lower() == "failed"
 
 
+async def reconcile_active_tasks() -> None:
+    """Sync terminal Redis status to DB for tasks whose SSE subscriber was not connected.
+
+    Called from a background loop every ~30 s.  For every task currently in an
+    active state (queued / crawling / synthesizing) it checks the Redis status
+    stream.  If the worker already published a terminal event (failed / review /
+    cancelled) that the backend never received (because no browser was watching
+    the SSE feed), the DB row is updated so the UI reflects the real outcome.
+    """
+    db = await get_db()
+    try:
+        ph = ",".join("?" * len(_ACTIVE_STATUSES))
+        cursor = await db.execute(
+            f"SELECT id FROM library_tasks WHERE status IN ({ph})",
+            _ACTIVE_STATUSES,
+        )
+        rows = await cursor.fetchall()
+    finally:
+        await db.close()
+
+    if not rows:
+        return
+
+    try:
+        q = get_queue()
+    except RuntimeError:
+        return  # Redis not yet connected
+
+    for row in rows:
+        task_id = dict(row)["id"]
+        try:
+            # Priority: check for a "failed" entry anywhere in the stream.
+            getter = getattr(q, "get_last_failed_status", None)
+            latest_failed = await getter(task_id) if callable(getter) else None
+            if latest_failed:
+                msg = (latest_failed.message or "").strip()
+                error_text = (
+                    msg or
+                    "Worker reported failure — check nanobot docker logs for details."
+                )[:8000]
+                await sync_task_status(task_id, TaskStatus.FAILED, error=error_text)
+                log.info(
+                    "reconciled task %s → failed (msg=%r)", task_id, error_text[:120],
+                )
+                continue
+
+            # Also promote to "review" if the worker successfully delivered but the
+            # SSE subscriber was gone before it published the "review" event.
+            latest = await q.get_latest_status(task_id)
+            if latest and latest.status == TaskStatus.REVIEW:
+                await sync_task_status(task_id, TaskStatus.REVIEW)
+                log.info("reconciled task %s → review", task_id)
+
+        except Exception as exc:
+            log.debug("reconcile: error checking task %s: %s", task_id, exc)
+
+
 async def ensure_failed_task_error(task: dict) -> dict:
     """If status is failed but SQLite has no error text, backfill from Redis status stream."""
     if not _is_failed_status(task.get("status")):

@@ -123,7 +123,7 @@ fi
 DEFAULT_MODEL="gemma4:e4b"
 # Worker (nanobot) model defaults — must match what the nanobot GPU can handle.
 WORKER_MODEL="${DEPLOY_WORKER_OLLAMA_MODEL:-gemma4:26b}"
-WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-32000}"
+WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-65536}"
 if ollama list 2>/dev/null | grep -q "$DEFAULT_MODEL"; then
     ok "Model $DEFAULT_MODEL already present"
 else
@@ -187,11 +187,11 @@ if cur and (cur.startswith('nemotron') or cur in ('llama3.2','llama3.2:latest'))
     data['ollama_model'] = chat_model
     changed = True
 # Worker model/ctx — fixed for Library nanobot (not Redis-driven)
-if (data.get('worker_ollama_model') or '').strip() != 'gemma4:26b' or data.get('worker_ollama_num_ctx') != 32000:
+if (data.get('worker_ollama_model') or '').strip() != 'gemma4:26b' or data.get('worker_ollama_num_ctx') != 65536:
     data['worker_ollama_model'] = 'gemma4:26b'
-    data['worker_ollama_num_ctx'] = 32000
+    data['worker_ollama_num_ctx'] = 65536
     changed = True
-    print('admin_config.json: worker → gemma4:26b, num_ctx → 32000')
+    print('admin_config.json: worker → gemma4:26b, num_ctx → 65536')
 if changed:
     p.write_text(json.dumps(data, indent=2) + '\n', 'utf-8')
 " "$cfg" "$DEFAULT_MODEL" "$WORKER_MODEL" "$WORKER_CTX"

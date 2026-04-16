@@ -129,20 +129,36 @@ async def _report_failure_to_m1(job_id: str, detail: str) -> None:
 async def _deliver_result(job_id: str, result: dict) -> None:
     """POST the completed artifact back to the M1 backend."""
     url = f"{config.M1_BASE_URL}/api/library/ingest"
+    markdown = result.get("markdown", "")
     payload = {
         "job_id": job_id,
-        "markdown": result["markdown"],
+        "markdown": markdown,
         "sources": result.get("sources", []),
         "summary": result.get("summary", ""),
     }
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(
-            url,
-            json=payload,
-            headers={"X-Nanobot-Key": config.NANOBOT_API_KEY},
+    log.info("delivering result for %s → %s (%d chars)", job_id, url, len(markdown))
+    # Use explicit per-phase timeouts — large markdown payloads can take a while to upload
+    # over LAN; 180 s write budget is generous but safe for multi-MB JSON bodies.
+    timeout = httpx.Timeout(connect=30.0, read=180.0, write=180.0, pool=30.0)
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                url,
+                json=payload,
+                headers={"X-Nanobot-Key": config.NANOBOT_API_KEY},
+            )
+            resp.raise_for_status()
+            log.info("delivered result for %s — %s", job_id, resp.json())
+    except Exception as exc:
+        log.error(
+            "DELIVERY FAILED for job %s → %s: %s. "
+            "Check M1_BASE_URL in .env.nanobot — it must be the backend's LAN IP address "
+            "(e.g. http://192.168.1.x:8000). mDNS names such as 'macmini.local' do NOT "
+            "resolve inside a Linux Docker container. Also verify NANOBOT_API_KEY matches "
+            "the backend's .env.",
+            job_id, url, exc,
         )
-        resp.raise_for_status()
-        log.info("delivered result for %s — %s", job_id, resp.json())
+        raise
 
 
 async def _publish_stats_loop(consumer: QueueConsumer) -> None:

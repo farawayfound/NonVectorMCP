@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Apply gemma4:26b + 32k worker defaults on nanobot: updated compose (Ollama env + memory limit),
+# Apply gemma4:26b + 64k worker defaults on nanobot: updated compose (Ollama env + memory limit),
 # patch .env.nanobot, stop duplicate host ollama, recreate stack, pull model.
 #
 # Run ON nanobot as root (after copying this script + docker-compose.nanobot.yml from the repo), e.g.:
@@ -42,9 +42,9 @@ else
   echo 'OLLAMA_MODEL=gemma4:26b' >> "$ENV_FILE"
 fi
 if grep -q '^OLLAMA_NUM_CTX=' "$ENV_FILE"; then
-  sed -i 's/^OLLAMA_NUM_CTX=.*/OLLAMA_NUM_CTX=32000/' "$ENV_FILE"
+  sed -i 's/^OLLAMA_NUM_CTX=.*/OLLAMA_NUM_CTX=65536/' "$ENV_FILE"
 else
-  echo 'OLLAMA_NUM_CTX=32000' >> "$ENV_FILE"
+  echo 'OLLAMA_NUM_CTX=65536' >> "$ENV_FILE"
 fi
 chown chunkylink:chunkylink "$ENV_FILE" 2>/dev/null || true
 
@@ -71,4 +71,4 @@ echo "==> ollama pull gemma4:26b (inside container)"
 "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama pull gemma4:26b
 
 echo "==> done. Check: docker compose -f ${COMPOSE_REL} exec ollama ollama ps"
-echo "    Worker num_ctx is pushed from M1 backend Redis; ensure WORKER_OLLAMA_NUM_CTX=32000 in backend .env or Admin."
+echo "    Align backend: WORKER_OLLAMA_NUM_CTX=65536 in Mac .env / deploy; worker reads OLLAMA_NUM_CTX from .env.nanobot."

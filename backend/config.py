@@ -5,6 +5,9 @@ import os
 from pathlib import Path
 from functools import lru_cache
 
+# Library nanobot worker fixed Ollama context (tokens). Keep in sync with ``worker/config.py`` default and deploy scripts.
+LIBRARY_WORKER_OLLAMA_NUM_CTX = 65536
+
 
 class Settings:
     """All settings with sensible defaults. Override via environment variables or .env file."""
@@ -145,7 +148,7 @@ class Settings:
     def _apply_fixed_worker_ollama(self) -> None:
         """Library nanobot worker always uses this model/context (no Redis switching)."""
         self.WORKER_OLLAMA_MODEL = "gemma4:26b"
-        self.WORKER_OLLAMA_NUM_CTX = 32000
+        self.WORKER_OLLAMA_NUM_CTX = LIBRARY_WORKER_OLLAMA_NUM_CTX
 
     def _load_admin_config(self) -> None:
         """Load runtime admin overrides from DATA_DIR/admin_config.json."""
@@ -207,7 +210,7 @@ class Settings:
             "max_library_articles": self.MAX_LIBRARY_ARTICLES,
             "worker_ollama_base_url": self.WORKER_OLLAMA_BASE_URL,
             "worker_ollama_model": "gemma4:26b",
-            "worker_ollama_num_ctx": 32000,
+            "worker_ollama_num_ctx": LIBRARY_WORKER_OLLAMA_NUM_CTX,
         }
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
