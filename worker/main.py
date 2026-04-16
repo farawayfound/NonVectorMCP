@@ -12,7 +12,7 @@ import httpx
 
 import config
 import sysstats
-from queue_consumer import QueueConsumer, WORKER_OLLAMA_REDIS_KEY
+from queue_consumer import QueueConsumer
 
 _STATS_KEY_PREFIX = "worker:stats:"
 _STATS_TTL_SEC = 60
@@ -30,79 +30,6 @@ _shutdown = asyncio.Event()
 def _handle_signal(*_):
     log.info("shutdown signal received")
     _shutdown.set()
-
-
-async def _sync_worker_config(consumer: QueueConsumer) -> None:
-    """Sync model config from Redis (backend Settings is the source of truth).
-
-    Updates ``config.OLLAMA_MODEL`` and ``config.OLLAMA_NUM_CTX`` in-place so
-    every downstream consumer (pipeline, llm_client) picks up the latest value
-    without needing direct Redis access.
-    """
-    try:
-        raw = await consumer.get_key(WORKER_OLLAMA_REDIS_KEY)
-        if not raw:
-            return
-        data = json.loads(raw)
-        if data.get("model"):
-            config.OLLAMA_MODEL = str(data["model"]).strip()
-        if data.get("num_ctx") is not None:
-            config.OLLAMA_NUM_CTX = int(data["num_ctx"])
-    except Exception as exc:
-        log.debug("config sync from redis skipped: %s", exc)
-
-
-async def _preload_model() -> None:
-    """Ensure the configured model is loaded on the local Ollama before jobs run.
-
-    Lists loaded models via ``/api/ps``, evicts any that don't match, then
-    warms the target with ``keep_alive=-1`` so it stays pinned.  600s read
-    timeout accommodates cold-loading large (26B+) models.
-    """
-    base = config.OLLAMA_BASE_URL.rstrip("/")
-    model = config.OLLAMA_MODEL
-    num_ctx = config.OLLAMA_NUM_CTX
-    log.info("preload: target model=%s num_ctx=%d at %s", model, num_ctx, base)
-
-    timeout = httpx.Timeout(connect=10.0, read=600.0, write=10.0, pool=10.0)
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            # List loaded models
-            ps_resp = await client.get(f"{base}/api/ps")
-            ps_resp.raise_for_status()
-            loaded = ps_resp.json().get("models") or []
-
-            # Normalise loaded names (Ollama reports "name" or "model")
-            def _name(m: dict) -> str:
-                return str(m.get("name") or m.get("model") or "").strip()
-
-            # Evict any model that isn't our target
-            for m in loaded:
-                other = _name(m)
-                if other and other != model:
-                    log.info("preload: evicting stale model '%s'", other)
-                    await client.post(
-                        f"{base}/api/generate",
-                        json={"model": other, "keep_alive": 0, "stream": False},
-                    )
-
-            # Warm the target (empty prompt = load-only, no generation)
-            log.info("preload: loading %s (num_ctx=%d)...", model, num_ctx)
-            resp = await client.post(
-                f"{base}/api/generate",
-                json={
-                    "model": model,
-                    "prompt": "",
-                    "stream": False,
-                    "think": False,
-                    "keep_alive": -1,
-                    "options": {"num_ctx": num_ctx},
-                },
-            )
-            resp.raise_for_status()
-            log.info("preload: %s ready", model)
-    except Exception as exc:
-        log.error("preload failed — first job will cold-load: %s", exc)
 
 
 async def _process_job(consumer: QueueConsumer, stream_id: str, job) -> None:
@@ -203,11 +130,12 @@ async def _publish_stats_loop(consumer: QueueConsumer) -> None:
 async def main() -> None:
     consumer = QueueConsumer(config.REDIS_URL, config.WORKER_ID)
     await consumer.connect()
-    await _sync_worker_config(consumer)
-    log.info("worker %s starting (model=%s, num_ctx=%d)",
-             config.WORKER_ID, config.OLLAMA_MODEL, config.OLLAMA_NUM_CTX)
-    await _preload_model()
-    log.info("worker %s listening for jobs...", config.WORKER_ID)
+    log.info(
+        "worker %s listening (Ollama model=%s num_ctx=%d from env — not Redis-overridden)",
+        config.WORKER_ID,
+        config.OLLAMA_MODEL,
+        config.OLLAMA_NUM_CTX,
+    )
 
     stats_task = asyncio.create_task(_publish_stats_loop(consumer))
 
@@ -217,7 +145,6 @@ async def main() -> None:
             if pair is None:
                 continue
             stream_id, job = pair
-            await _sync_worker_config(consumer)
             await _process_job(consumer, stream_id, job)
     except asyncio.CancelledError:
         pass
