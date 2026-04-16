@@ -7,14 +7,19 @@ const AUTO_DEG_PER_SEC = 14;
 const DRAG_DEG_PER_PX = 0.45;
 const HOVER_LERP = 0.07;
 const MAX_HOVER_TILT = 16;
-/** ~cos(40°) so three slots near the front (0°, ±40° for 9 cards) stay clickable/readable. */
 const READABLE_COS = 0.72;
 const EDGE_COS = 0.12;
 
+export type SuggestionCarouselVisualMode = "intro" | "idle" | "pickHero" | "scatterAll";
+
 type Props = {
   pool: string[];
-  onSelect: (question: string) => void;
+  /** Called when user commits a choice from a readable front card. */
+  onPick: (question: string, slotIndex: number) => void;
   paused?: boolean;
+  visualMode: SuggestionCarouselVisualMode;
+  /** Required when visualMode is `pickHero`. */
+  pickHeroSlot?: number | null;
 };
 
 function pickFromPool(pool: string[], avoid?: string): string {
@@ -35,7 +40,13 @@ function wrapRelDeg(raw: number): number {
   return r;
 }
 
-export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
+export function SuggestionCarousel({
+  pool,
+  onPick,
+  paused = false,
+  visualMode,
+  pickHeroSlot = null,
+}: Props) {
   const [texts, setTexts] = useState<string[]>(() =>
     Array.from({ length: NUM_SLOTS }, () => pickFromPool(pool)),
   );
@@ -55,6 +66,11 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
   const rafRef = useRef(0);
   const lastTRef = useRef<number | null>(null);
   const edgePrimedRef = useRef(false);
+
+  const freeze =
+    visualMode === "pickHero" ||
+    visualMode === "scatterAll" ||
+    visualMode === "intro";
 
   useEffect(() => {
     if (pool.length === 0) return;
@@ -124,11 +140,7 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
       const dt = Math.min((t - lastTRef.current) / 1000, 0.05);
       lastTRef.current = t;
 
-      if (
-        !paused &&
-        !pointerOverStageRef.current &&
-        !draggingRef.current
-      ) {
+      if (!paused && !freeze && !pointerOverStageRef.current && !draggingRef.current) {
         spinDegRef.current += AUTO_DEG_PER_SEC * dt;
       }
 
@@ -149,11 +161,13 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
         const cosF = Math.cos((rel * Math.PI) / 180);
         if (!edgePrimedRef.current) {
           prevCosRef.current[i] = cosF;
-        } else {
+        } else if (!freeze) {
           const prev = prevCosRef.current[i];
           if (prev > EDGE_COS && cosF <= EDGE_COS) {
             refreshSlot(i);
           }
+          prevCosRef.current[i] = cosF;
+        } else {
           prevCosRef.current[i] = cosF;
         }
 
@@ -162,8 +176,9 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
           const readable = cosF >= READABLE_COS;
           const vis = 0.22 + 0.78 * Math.max(0, Math.min(1, (cosF - 0.08) / 0.92));
           btn.style.opacity = String(vis);
-          btn.style.pointerEvents = readable && !paused ? "auto" : "none";
-          btn.style.cursor = readable && !paused ? "pointer" : "default";
+          const allowClick = readable && !paused && !freeze;
+          btn.style.pointerEvents = allowClick ? "auto" : "none";
+          btn.style.cursor = allowClick ? "pointer" : "default";
         }
       }
 
@@ -177,29 +192,43 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
       cancelAnimationFrame(rafRef.current);
       lastTRef.current = null;
     };
-  }, [paused, refreshSlot]);
+  }, [paused, refreshSlot, freeze]);
 
   const onPointerDown = (e: React.PointerEvent) => {
-    if (paused) return;
+    if (paused || freeze) return;
+    const t = e.target as HTMLElement;
+    if (t.closest(".suggestion-carousel-card")) return;
     draggingRef.current = true;
     dragMovedRef.current = false;
     lastPointerXRef.current = e.clientX;
     stageRef.current?.setPointerCapture(e.pointerId);
   };
 
+  const onCardPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    draggingRef.current = false;
+    dragMovedRef.current = false;
+  };
+
   const onCardClick = (slot: number) => {
-    if (paused || dragMovedRef.current) return;
+    if (paused || freeze || dragMovedRef.current) return;
     const rel = wrapRelDeg(slot * STEP_DEG + spinDegRef.current);
     const cosF = Math.cos((rel * Math.PI) / 180);
     if (cosF < READABLE_COS) return;
-    onSelect(texts[slot] ?? "");
+    onPick(texts[slot] ?? "", slot);
   };
+
+  const stageClass =
+    "suggestion-carousel-stage" +
+    (visualMode === "pickHero" ? " suggestion-carousel-stage--pick" : "") +
+    (visualMode === "scatterAll" ? " suggestion-carousel-stage--scatter-all" : "") +
+    (freeze ? " suggestion-carousel-stage--frozen" : "");
 
   return (
     <div className="suggestion-carousel" aria-label="Suggested questions carousel">
       <div
         ref={stageRef}
-        className="suggestion-carousel-stage"
+        className={stageClass}
         onPointerEnter={() => {
           pointerOverStageRef.current = true;
         }}
@@ -211,25 +240,60 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
       >
         <div className="suggestion-carousel-pivot-outer">
           <div ref={pivotRef} className="suggestion-carousel-pivot">
-            {texts.map((text, i) => (
-              <div
-                key={i}
-                className="suggestion-carousel-cell"
-                style={{ transform: `rotateY(${i * STEP_DEG}deg) translateZ(${RADIUS_PX}px)` }}
-              >
-                <button
-                  type="button"
-                  ref={(el) => {
-                    cardRefs.current[i] = el;
-                  }}
-                  className="suggestion-carousel-card"
-                  disabled={paused}
-                  onClick={() => onCardClick(i)}
+            {texts.map((text, i) => {
+              const isHero = visualMode === "pickHero" && pickHeroSlot === i;
+              const isLeftExit =
+                visualMode === "pickHero" &&
+                pickHeroSlot != null &&
+                i < pickHeroSlot;
+              const isRightExit =
+                visualMode === "pickHero" &&
+                pickHeroSlot != null &&
+                i > pickHeroSlot;
+              let flipMod = "";
+              if (visualMode === "intro") {
+                flipMod =
+                  i % 2 === 0
+                    ? " suggestion-carousel-flip--intro-left"
+                    : " suggestion-carousel-flip--intro-right";
+              }
+              if (isHero) flipMod += " suggestion-carousel-flip--hero";
+              else if (isLeftExit) flipMod += " suggestion-carousel-flip--exit-left";
+              else if (isRightExit) flipMod += " suggestion-carousel-flip--exit-right";
+              else if (visualMode === "scatterAll") {
+                flipMod += ` suggestion-carousel-flip--scatter-${i % 4}`;
+              }
+
+              return (
+                <div
+                  key={i}
+                  className="suggestion-carousel-cell"
+                  style={{ transform: `rotateY(${i * STEP_DEG}deg) translateZ(${RADIUS_PX}px)` }}
                 >
-                  <span className="suggestion-carousel-card-text">{text}</span>
-                </button>
-              </div>
-            ))}
+                  <div
+                    className={`suggestion-carousel-flip${flipMod}`}
+                    style={
+                      visualMode === "intro"
+                        ? ({ animationDelay: `${i * 0.04}s` } as React.CSSProperties)
+                        : undefined
+                    }
+                  >
+                    <button
+                      type="button"
+                      ref={(el) => {
+                        cardRefs.current[i] = el;
+                      }}
+                      className="suggestion-carousel-card"
+                      disabled={paused}
+                      onPointerDown={onCardPointerDown}
+                      onClick={() => onCardClick(i)}
+                    >
+                      <span className="suggestion-carousel-card-text">{text}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

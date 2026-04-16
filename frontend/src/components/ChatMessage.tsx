@@ -3,13 +3,15 @@ import type { ChatMessage as Msg } from "../types";
 
 interface Props {
   message: Msg;
+  /** Hide the collapsible thinking UI (e.g. when thinking is shown in AMA status strip). */
+  suppressThinking?: boolean;
 }
 
-export function ChatMessage({ message }: Props) {
+export function ChatMessage({ message, suppressThinking }: Props) {
   const isUser = message.role === "user";
   const [thinkingOpen, setThinkingOpen] = useState(false);
   const thinkingRef = useRef<HTMLDivElement>(null);
-  const hasThinking = !isUser && !!message.thinking;
+  const hasThinking = !isUser && !!message.thinking && !suppressThinking;
   const isThinkingLive = hasThinking && !message.thinkingDone;
 
   // While thinking is live/streaming, keep it open; collapse when done

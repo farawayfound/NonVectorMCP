@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, forwardRef } from "react";
 
 interface Props {
   onSend: (message: string) => void;
@@ -6,7 +6,10 @@ interface Props {
   placeholder?: string;
 }
 
-export function ChatInput({ onSend, disabled, placeholder = "Ask a question..." }: Props) {
+export const ChatInput = forwardRef<HTMLDivElement, Props>(function ChatInput(
+  { onSend, disabled, placeholder = "Ask a question..." }: Props,
+  ref,
+) {
   const [text, setText] = useState("");
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -29,7 +32,7 @@ export function ChatInput({ onSend, disabled, placeholder = "Ask a question..." 
   };
 
   return (
-    <div className="chat-input">
+    <div ref={ref} className="chat-input">
       <textarea
         ref={inputRef}
         value={text}
@@ -44,4 +47,4 @@ export function ChatInput({ onSend, disabled, placeholder = "Ask a question..." 
       </button>
     </div>
   );
-}
+});

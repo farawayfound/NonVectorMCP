@@ -226,7 +226,7 @@ body {
 
 .suggestion-carousel-stage {
   position: relative;
-  height: 500px;
+  height: 420px;
   margin: 0 auto;
   max-width: 720px;
   perspective: 1100px;
@@ -262,9 +262,9 @@ body {
   left: 0;
   top: 0;
   width: 220px;
-  height: 380px;
+  height: 300px;
   margin-left: -110px;
-  margin-top: -90px;
+  margin-top: -60px;
   transform-style: preserve-3d;
   backface-visibility: hidden;
 }
@@ -304,6 +304,223 @@ body {
   line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.suggestion-carousel-flip {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform-origin: center center;
+}
+
+.suggestion-carousel-stage--frozen {
+  pointer-events: none;
+}
+
+@keyframes amaIntroFromLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-85vw);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes amaIntroFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(85vw);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.suggestion-carousel-flip--intro-left {
+  animation: amaIntroFromLeft 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.suggestion-carousel-flip--intro-right {
+  animation: amaIntroFromRight 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes amaPickHero {
+  to {
+    transform: translateZ(200px) scale(1.42);
+    opacity: 1;
+  }
+}
+
+@keyframes amaPickExitLeft {
+  to {
+    transform: translateX(-130vw) rotate(-10deg);
+    opacity: 0;
+  }
+}
+
+@keyframes amaPickExitRight {
+  to {
+    transform: translateX(130vw) rotate(10deg);
+    opacity: 0;
+  }
+}
+
+.suggestion-carousel-flip--hero {
+  animation: amaPickHero 0.58s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  z-index: 30;
+}
+
+.suggestion-carousel-flip--exit-left {
+  animation: amaPickExitLeft 0.52s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+}
+
+.suggestion-carousel-flip--exit-right {
+  animation: amaPickExitRight 0.52s cubic-bezier(0.4, 0, 0.8, 1) forwards;
+}
+
+@keyframes amaScatter0 {
+  to {
+    transform: translateX(-115vw) translateY(-25vh) rotate(-12deg);
+    opacity: 0;
+  }
+}
+@keyframes amaScatter1 {
+  to {
+    transform: translateX(115vw) translateY(15vh) rotate(12deg);
+    opacity: 0;
+  }
+}
+@keyframes amaScatter2 {
+  to {
+    transform: translateX(-95vw) translateY(35vh) rotate(8deg);
+    opacity: 0;
+  }
+}
+@keyframes amaScatter3 {
+  to {
+    transform: translateX(95vw) translateY(-30vh) rotate(-8deg);
+    opacity: 0;
+  }
+}
+
+.suggestion-carousel-flip--scatter-0 {
+  animation: amaScatter0 0.55s cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+.suggestion-carousel-flip--scatter-1 {
+  animation: amaScatter1 0.55s cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+.suggestion-carousel-flip--scatter-2 {
+  animation: amaScatter2 0.55s cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+.suggestion-carousel-flip--scatter-3 {
+  animation: amaScatter3 0.55s cubic-bezier(0.4, 0, 0.9, 1) forwards;
+}
+
+/* AMA — threaded question cards + motion */
+.ama-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition: transform 0.48s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.48s ease;
+}
+
+.ama-thread--exit {
+  transform: translateY(110vh);
+  opacity: 0;
+}
+
+.ama-turn {
+  margin-bottom: 20px;
+}
+
+.ama-q-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 72px;
+  padding: 16px 20px;
+  margin-bottom: 8px;
+  text-align: center;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-hover) 100%);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.45;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+}
+
+.ama-q-card--from-input {
+  animation: amaQFromInput 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ama-q-card--from-input-bar {
+  animation: amaQFromInputBar 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes amaQFromInput {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes amaQFromInputBar {
+  from {
+    opacity: 0;
+    transform: translateY(48px) scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.ama-progress-wrap {
+  opacity: 0;
+  transform: translateY(-10px);
+  animation: amaProgressDrop 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 0.1s;
+}
+
+@keyframes amaProgressDrop {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ama-turn .chat-message {
+  padding-top: 4px;
+}
+
+.chat-progress-thinking {
+  margin-top: 10px;
+  padding: 10px 12px;
+  max-height: 180px;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat-progress-thinking--min {
+  max-height: 2.6em;
+  overflow: hidden;
+  opacity: 0.85;
 }
 
 .chat-message { padding: 12px 0; }
