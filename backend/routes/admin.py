@@ -42,6 +42,36 @@ router = APIRouter()
 # Track demo indexing job state
 _demo_job: dict = {"status": "idle", "error": None}
 
+
+@router.get("/ollama/worker/debug-connectivity")
+async def debug_worker_connectivity():
+    """Temporary debug endpoint — test httpx connectivity to worker Ollama from within the running process."""
+    import httpx, sys, traceback as tb
+    results = {}
+    base = get_settings().resolved_worker_ollama_base_url() or "http://192.168.0.152:11434"
+    results["base_url"] = base
+    results["python"] = sys.version
+    try:
+        import uvloop
+        results["uvloop"] = uvloop.__version__
+    except Exception:
+        results["uvloop"] = "not installed"
+    # Test 1: plain httpx AsyncClient
+    try:
+        async with httpx.AsyncClient(trust_env=False, timeout=5.0) as c:
+            r = await c.get(base)
+            results["plain_httpx"] = {"status": r.status_code, "text": r.text[:40]}
+    except Exception as e:
+        results["plain_httpx"] = {"error": type(e).__name__, "msg": str(e), "trace": tb.format_exc()[-500:]}
+    # Test 2: /api/tags
+    try:
+        async with httpx.AsyncClient(trust_env=False, timeout=10.0) as c:
+            r = await c.get(f"{base}/api/tags")
+            results["tags"] = {"status": r.status_code, "count": len(r.json().get("models", []))}
+    except Exception as e:
+        results["tags"] = {"error": type(e).__name__, "msg": str(e), "trace": tb.format_exc()[-500:]}
+    return results
+
 ALLOWED_EXTENSIONS = {".pdf", ".txt", ".docx", ".pptx", ".csv"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
