@@ -185,6 +185,14 @@ _upsert_env_kv "${REPO}/.env" "OLLAMA_MODEL" "${WORKER_MODEL}"
 _upsert_env_kv "${REPO}/.env" "OLLAMA_NUM_CTX" "${WORKER_CTX}"
 _upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_MODEL" "${WORKER_MODEL}"
 _upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_NUM_CTX" "${WORKER_CTX}"
+if [[ -f "${REPO}/.env" ]]; then
+  echo "    .env model keys:"
+  grep -E '^OLLAMA_MODEL=|^OLLAMA_NUM_CTX=|^WORKER_OLLAMA_MODEL=|^WORKER_OLLAMA_NUM_CTX=' "${REPO}/.env" || true
+fi
+if [[ -f "${REPO}/.env.nanobot" ]]; then
+  echo "    .env.nanobot model keys:"
+  grep -E '^OLLAMA_MODEL=|^OLLAMA_NUM_CTX=' "${REPO}/.env.nanobot" || true
+fi
 
 # Persist runtime admin overrides so startup cannot re-seed stale e4b/8k.
 if [[ -x "${VENV}/bin/python" ]]; then
@@ -217,4 +225,26 @@ echo "==> systemctl restart chunkylink"
 systemctl restart chunkylink
 sleep 2
 systemctl is-active chunkylink
+
+# ── Enforce nanobot Ollama runtime model after restart ──────────────────────
+if command -v curl &>/dev/null && command -v ollama &>/dev/null; then
+  echo "==> enforcing Ollama runtime model (${WORKER_MODEL}, ctx=${WORKER_CTX})"
+  # Best-effort: remove legacy model from memory if CLI supports stop.
+  if [[ "${WORKER_MODEL}" != "gemma4:e4b" ]]; then
+    ollama stop gemma4:e4b >/dev/null 2>&1 || true
+  fi
+  # Ensure target model is present and warm it with desired context.
+  ollama pull "${WORKER_MODEL}" >/dev/null 2>&1 || true
+  curl -sS "http://127.0.0.1:11434/api/generate" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\":\"${WORKER_MODEL}\",\"prompt\":\"ok\",\"stream\":false,\"options\":{\"num_ctx\":${WORKER_CTX}},\"keep_alive\":\"24h\"}" \
+    >/dev/null || true
+  PS_JSON="$(curl -sS -m 10 http://127.0.0.1:11434/api/ps || true)"
+  if ! echo "${PS_JSON}" | grep -q "\"name\":\"${WORKER_MODEL}\""; then
+    echo "ERROR: Ollama runtime did not load ${WORKER_MODEL}. Current /api/ps:"
+    echo "${PS_JSON}"
+    exit 1
+  fi
+  echo "    Ollama runtime loaded ${WORKER_MODEL}"
+fi
 echo "==> done. If NLP / categories changed: Admin → Demo KB → Build Index."
