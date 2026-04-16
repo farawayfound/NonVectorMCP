@@ -232,7 +232,7 @@ body {
 
 .suggestion-carousel-stage {
   position: relative;
-  height: 300px;
+  height: 360px;
   margin: 0 auto;
   max-width: 720px;
   perspective: 1100px;
@@ -268,9 +268,9 @@ body {
   left: 0;
   top: 0;
   width: 220px;
-  height: 120px;
+  height: 180px;
   margin-left: -110px;
-  margin-top: -60px;
+  margin-top: -90px;
   transform-style: preserve-3d;
   backface-visibility: hidden;
 }
@@ -306,7 +306,8 @@ body {
 
 .suggestion-carousel-card-text {
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 6;
+  line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

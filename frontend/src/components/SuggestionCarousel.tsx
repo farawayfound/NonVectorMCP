@@ -49,6 +49,7 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
   const targetHoverYRef = useRef(0);
   const prevCosRef = useRef<number[]>(Array.from({ length: NUM_SLOTS }, () => 1));
   const draggingRef = useRef(false);
+  const pointerOverStageRef = useRef(false);
   const dragMovedRef = useRef(false);
   const lastPointerXRef = useRef(0);
   const rafRef = useRef(0);
@@ -123,7 +124,11 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
       const dt = Math.min((t - lastTRef.current) / 1000, 0.05);
       lastTRef.current = t;
 
-      if (!paused) {
+      if (
+        !paused &&
+        !pointerOverStageRef.current &&
+        !draggingRef.current
+      ) {
         spinDegRef.current += AUTO_DEG_PER_SEC * dt;
       }
 
@@ -193,11 +198,17 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
   return (
     <div className="suggestion-carousel" aria-label="Suggested questions carousel">
       <p className="suggestion-carousel-hint">
-        Drag to spin · hover tilts · click a front card to ask
+        Auto-spin pauses while you hover or drag · click a front card to ask
       </p>
       <div
         ref={stageRef}
         className="suggestion-carousel-stage"
+        onPointerEnter={() => {
+          pointerOverStageRef.current = true;
+        }}
+        onPointerLeave={() => {
+          pointerOverStageRef.current = false;
+        }}
         onPointerDown={onPointerDown}
         role="presentation"
       >
