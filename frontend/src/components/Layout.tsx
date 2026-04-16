@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { User } from "../types";
 import { RequestAccessModal } from "./RequestAccessModal";
+import { BackgroundAudio } from "./BackgroundAudio";
 
 interface Props {
   user: User | null;
@@ -24,6 +25,7 @@ export function Layout({ user, onLogout, children }: Props) {
 
   return (
     <div className="app-layout">
+      <BackgroundAudio />
       <header className="app-header">
         <div className="header-left">
           <Link to="/" className="logo">ChunkyPotato</Link>

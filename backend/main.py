@@ -187,6 +187,7 @@ async def lifespan(app: FastAPI):
               settings.INDEXES_DIR / "demo" / "router",
               settings.INDEXES_DIR / "demo" / "state",
               settings.UPLOADS_DIR / "demo",
+              settings.UPLOADS_DIR / "media",
               settings.DB_PATH.parent,
               settings.LOG_DIR]:
         d.mkdir(parents=True, exist_ok=True)
@@ -322,6 +323,15 @@ def create_app() -> FastAPI:
                 "dist_main_js": probe.get("dist_main_js"),
             }
         return out
+
+    # Public site audio / assets under DATA_DIR (not in git); must register before SPA catch-all.
+    media_root = settings.UPLOADS_DIR / "media"
+    media_root.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/uploads/media",
+        StaticFiles(directory=str(media_root)),
+        name="uploads_media",
+    )
 
     # Serve the pre-built React frontend if the dist/ folder exists.
     # This lets uvicorn run as a single process without a separate nginx.
