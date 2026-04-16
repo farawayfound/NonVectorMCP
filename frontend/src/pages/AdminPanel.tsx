@@ -1275,11 +1275,6 @@ function OllamaTab() {
         >
           <strong style={{ color: "var(--danger)" }}>Connection error:</strong>{" "}
           <span style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>{wOllama.error}</span>
-          <p style={{ color: "var(--text-muted)", margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
-            The backend server must be able to reach this URL. If the backend runs in Docker,
-            the container may not have access to the host LAN — check your Docker network mode
-            or use <code style={{ fontSize: "0.75rem" }}>network_mode: host</code> on the backend service.
-          </p>
         </div>
       )}
 
