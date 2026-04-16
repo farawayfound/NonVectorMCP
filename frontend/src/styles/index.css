@@ -232,7 +232,7 @@ body {
 
 .suggestion-carousel-stage {
   position: relative;
-  height: 360px;
+  height: 500px;
   margin: 0 auto;
   max-width: 720px;
   perspective: 1100px;
@@ -268,7 +268,7 @@ body {
   left: 0;
   top: 0;
   width: 220px;
-  height: 180px;
+  height: 380px;
   margin-left: -110px;
   margin-top: -90px;
   transform-style: preserve-3d;
