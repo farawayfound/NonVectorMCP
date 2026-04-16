@@ -622,7 +622,7 @@ function OllamaTab() {
   const [pullName, setPullName] = useState("");
   const [pullStatus, setPullStatus] = useState("");
   const [pulling, setPulling] = useState(false);
-  const [pullNameWorker, setPullNameWorker] = useState("");
+  const [pullNameWorker, setPullNameWorker] = useState("gemma4:26b");
   const [pullStatusWorker, setPullStatusWorker] = useState("");
   const [pullingWorker, setPullingWorker] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -905,7 +905,7 @@ function OllamaTab() {
   const worker = data.worker ?? {
     ollama: { status: "unconfigured", error: "Upgrade backend", base_url: "" },
     configured_model: "",
-    num_ctx: 8192,
+    num_ctx: 131072,
     models: [],
     loaded_names: [],
     context_window: null,
@@ -1304,7 +1304,7 @@ function OllamaTab() {
         <h4 style={{ marginBottom: "0.5rem" }}>Pull Model</h4>
         <div style={{ display: "flex", gap: "0.75rem", alignItems: "center", flexWrap: "wrap" }}>
           <input
-            placeholder="e.g. gemma4:e4b"
+            placeholder="e.g. gemma4:26b"
             value={pullNameWorker}
             onChange={(e) => setPullNameWorker(e.target.value)}
             disabled={pullingWorker}

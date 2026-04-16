@@ -19,9 +19,9 @@ NANOBOT_API_KEY = _env("NANOBOT_API_KEY", "")
 
 # Ollama (runs locally on nanobot)
 OLLAMA_BASE_URL = _env("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = _env("OLLAMA_MODEL", "gemma3:27b")
+OLLAMA_MODEL = _env("OLLAMA_MODEL", "gemma4:26b")
 OLLAMA_TIMEOUT = int(_env("OLLAMA_TIMEOUT", "300"))
-OLLAMA_NUM_CTX = int(_env("OLLAMA_NUM_CTX", "8192"))
+OLLAMA_NUM_CTX = int(_env("OLLAMA_NUM_CTX", "131072"))
 
 # Crawling
 MAX_SEARCH_RESULTS = int(_env("MAX_SEARCH_RESULTS", "10"))

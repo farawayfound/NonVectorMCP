@@ -129,8 +129,8 @@ class Settings:
         # Nanobot Library worker Ollama (reachable from this backend, e.g. http://nanobot:11434).
         # ``WORKER_OLLAMA_BASE_URL`` may be overridden from admin_config.json (Ollama tab).
         self.WORKER_OLLAMA_BASE_URL = os.getenv("WORKER_OLLAMA_BASE_URL", "").strip()
-        self.WORKER_OLLAMA_MODEL = os.getenv("WORKER_OLLAMA_MODEL", "gemma4:e4b").strip()
-        self.WORKER_OLLAMA_NUM_CTX = int(os.getenv("WORKER_OLLAMA_NUM_CTX", "8192"))
+        self.WORKER_OLLAMA_MODEL = os.getenv("WORKER_OLLAMA_MODEL", "gemma4:26b").strip()
+        self.WORKER_OLLAMA_NUM_CTX = int(os.getenv("WORKER_OLLAMA_NUM_CTX", "131072"))
 
         # ── Runtime admin overrides (mutable; persisted to DATA_DIR/admin_config.json) ──
         # These are set/updated via the admin Configuration tab at runtime.

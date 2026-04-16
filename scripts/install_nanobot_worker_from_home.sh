@@ -3,6 +3,8 @@
 # Run on nanobot as root:
 #   sudo bash ~/chunkylink-nanobot-staging/install_nanobot_worker_from_home.sh
 #
+# Optional: NANOBOT_WORKER_OLLAMA_MODEL (default gemma4:26b), NANOBOT_SKIP_OLLAMA_PULL=1 to skip post-up pull.
+#
 set -euo pipefail
 
 # When run via `sudo`, HOME is root — use the invoking user's home for the staging dir.
@@ -72,6 +74,13 @@ elif command -v docker-compose >/dev/null 2>&1; then
 else
   echo "ERROR: need 'docker compose' (plugin) or docker-compose v1."
   exit 1
+fi
+
+DEFAULT_WORKER_OLLAMA_MODEL="${NANOBOT_WORKER_OLLAMA_MODEL:-gemma4:26b}"
+if [[ "${NANOBOT_SKIP_OLLAMA_PULL:-0}" != "1" ]]; then
+  echo "==> ollama pull ${DEFAULT_WORKER_OLLAMA_MODEL} (nanobot stack; no-op if already present)"
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama pull "${DEFAULT_WORKER_OLLAMA_MODEL}" || \
+    echo "WARN: ollama pull failed. When Ollama is ready: ${DOCKER_BIN} compose -f ${COMPOSE_REL} exec ollama ollama pull ${DEFAULT_WORKER_OLLAMA_MODEL}"
 fi
 
 echo "==> status"

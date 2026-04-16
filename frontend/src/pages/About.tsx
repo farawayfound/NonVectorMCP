@@ -34,7 +34,7 @@ export function About() {
             The research pipeline has since been promoted to its own device: meet the{" "}
             <strong>Nanobot</strong>—a second machine that sits next to the first machine and is also
             not a data center. It pulls research jobs off a Redis queue, runs its own Ollama instance (
-            <code className="monospace">gemma4:e4b</code>, because apparently one underpowered LLM was not enough),
+            <code className="monospace">gemma4:26b</code> with a 128k-token context window),
             crawls the web, synthesizes reports, and posts the results back over the local network. This is
             what engineers mean when they say "distributed systems." The distribution is mostly heat.
           </p>
