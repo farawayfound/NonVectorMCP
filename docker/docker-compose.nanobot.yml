@@ -23,6 +23,11 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    # Parallel slots multiply KV RAM; 1 keeps peak usage low on 32GB hosts (see Ollama docs / issues).
+    environment:
+      - OLLAMA_NUM_PARALLEL=1
+    # Give the container a high explicit RAM budget so Ollama's cgroup "available" is not stuck ~13GiB.
+    mem_limit: 28g
     restart: unless-stopped
 
 volumes:

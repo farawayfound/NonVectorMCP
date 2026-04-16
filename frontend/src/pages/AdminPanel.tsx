@@ -1275,6 +1275,16 @@ function OllamaTab() {
         >
           <strong style={{ color: "var(--danger)" }}>Connection error:</strong>{" "}
           <span style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>{wOllama.error}</span>
+          <p style={{ margin: "0.75rem 0 0", color: "var(--text-muted)", lineHeight: 1.45 }}>
+            The backend cannot open TCP to this URL (firewall, wrong IP, Wi‑Fi client isolation, VPN, or Ollama not listening).
+            On the <strong>machine that runs this API</strong>, run{" "}
+            <code style={{ fontSize: "0.75rem" }}>
+              curl -sS -m 5 {(worker.base_url || "").replace(/\/$/, "") || "http://<nanobot-ip>:11434"}/
+            </code>
+            . On nanobot: <code style={{ fontSize: "0.75rem" }}>sudo ufw allow 11434/tcp</code>,{" "}
+            <code style={{ fontSize: "0.75rem" }}>docker ps</code> for the ollama container, and{" "}
+            <code style={{ fontSize: "0.75rem" }}>sudo ss -tlnp | grep 11434</code>.
+          </p>
         </div>
       )}
 

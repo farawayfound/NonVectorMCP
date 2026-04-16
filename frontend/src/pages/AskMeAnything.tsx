@@ -4,12 +4,23 @@ import { ChatMessage } from "../components/ChatMessage";
 import { ChatInput } from "../components/ChatInput";
 import { ChatProgress } from "../components/ChatProgress";
 import { RequestAccessModal } from "../components/RequestAccessModal";
+import { SuggestionCarousel } from "../components/SuggestionCarousel";
 import { getChatSuggestions } from "../api/client";
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
 export function AskMeAnything() {
   const { messages, streaming, phase, send, clear } = useChat("/chat/ask");
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionPool, setSuggestionPool] = useState<string[]>([]);
+  const [reduceMotion, setReduceMotion] = useState(false);
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
 
@@ -18,14 +29,25 @@ export function AskMeAnything() {
   }, [messages]);
 
   useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduceMotion(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
     getChatSuggestions()
       .then((data) => {
         const pool = data.suggestions || [];
-        const shuffled = pool.sort(() => Math.random() - 0.5);
-        setSuggestions(shuffled.slice(0, 4));
+        setSuggestionPool(
+          pool.length > 0
+            ? shuffle(pool)
+            : ["Tell me about your professional background"],
+        );
       })
       .catch(() => {
-        setSuggestions(["Tell me about your professional background"]);
+        setSuggestionPool(["Tell me about your professional background"]);
       });
   }, []);
 
@@ -53,6 +75,8 @@ export function AskMeAnything() {
     [send, rateLimited],
   );
 
+  const empty = messages.length === 0;
+
   return (
     <div className="chat-page">
       <div className="chat-header">
@@ -62,14 +86,21 @@ export function AskMeAnything() {
         )}
       </div>
 
-      <div className="chat-messages">
-        {messages.length === 0 && (
-          <div className="chat-empty">
+      <div className={`chat-messages${empty ? " chat-messages--empty-carousel" : ""}`}>
+        {empty && (
+          <div className="chat-empty chat-empty--carousel">
             <p>Ask anything about my background, skills, or projects.</p>
-            {suggestions.length > 0 && (
+            {suggestionPool.length > 0 && !reduceMotion && (
+              <SuggestionCarousel
+                pool={suggestionPool}
+                onSelect={handleSend}
+                paused={streaming || rateLimited}
+              />
+            )}
+            {suggestionPool.length > 0 && reduceMotion && (
               <div className="suggestions">
-                {suggestions.map((q, i) => (
-                  <button key={i} onClick={() => handleSend(q)}>
+                {suggestionPool.slice(0, 6).map((q, i) => (
+                  <button key={i} type="button" onClick={() => handleSend(q)}>
                     {q}
                   </button>
                 ))}
