@@ -84,12 +84,14 @@ export interface ChatStreamEvent {
 export async function* streamChat(
   endpoint: "/chat/ask" | "/chat/documents",
   body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
 ): AsyncGenerator<ChatStreamEvent> {
   const res = await fetch(`${BASE}${endpoint}`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal: options?.signal,
   });
   if (!res.ok) {
     const raw = await res.text();

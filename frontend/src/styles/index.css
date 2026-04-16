@@ -264,25 +264,26 @@ body {
   width: 220px;
   height: 300px;
   margin-left: -110px;
-  margin-top: -60px;
+  margin-top: -150px;
   transform-style: preserve-3d;
   backface-visibility: hidden;
 }
 
 .suggestion-carousel-card {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   width: 100%;
   height: 100%;
-  padding: 14px 16px;
+  padding: 8px 10px 10px;
   text-align: center;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: linear-gradient(145deg, var(--bg-card) 0%, var(--bg-hover) 100%);
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.4;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
   transition: border-color 0.2s, box-shadow 0.2s;
   transform: translateZ(0.1px);
@@ -299,11 +300,15 @@ body {
 }
 
 .suggestion-carousel-card-text {
-  display: -webkit-box;
-  -webkit-line-clamp: 6;
-  line-clamp: 6;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  padding: 2px 2px 0;
+  scrollbar-width: thin;
 }
 
 .suggestion-carousel-flip {
@@ -348,8 +353,12 @@ body {
 }
 
 @keyframes amaPickHero {
+  from {
+    transform: perspective(920px) rotateY(var(--ama-pick-from, 0deg)) scale(0.92) translateZ(0);
+    opacity: 1;
+  }
   to {
-    transform: translateZ(200px) scale(1.42);
+    transform: perspective(920px) rotateY(0deg) scale(1.42) translateZ(240px);
     opacity: 1;
   }
 }
@@ -369,8 +378,9 @@ body {
 }
 
 .suggestion-carousel-flip--hero {
-  animation: amaPickHero 0.58s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: amaPickHero 0.68s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   z-index: 30;
+  transform-style: preserve-3d;
 }
 
 .suggestion-carousel-flip--exit-left {
@@ -438,11 +448,11 @@ body {
 
 .ama-q-card {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: 72px;
-  padding: 16px 20px;
-  margin-bottom: 8px;
+  padding: 10px 16px 12px;
+  margin-bottom: 0;
   text-align: center;
   border-radius: 12px;
   border: 1px solid var(--border);
@@ -451,6 +461,8 @@ body {
   font-size: 15px;
   line-height: 1.45;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.28);
+  white-space: normal;
+  word-break: break-word;
 }
 
 .ama-q-card--from-input {
@@ -483,18 +495,36 @@ body {
   }
 }
 
-.ama-progress-wrap {
+.ama-progress-track {
+  overflow: hidden;
+  max-height: 0;
   opacity: 0;
-  transform: translateY(-10px);
-  animation: amaProgressDrop 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  animation-delay: 0.1s;
+  transform: translateY(-100%);
+  margin-top: 0;
 }
 
-@keyframes amaProgressDrop {
+.ama-progress-track--slide-open {
+  animation: amaProgressSlide 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 0.08s;
+}
+
+@keyframes amaProgressSlide {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-100%);
+  }
   to {
+    max-height: 360px;
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.ama-progress-inner {
+  padding-top: 6px;
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
 }
 
 .ama-turn .chat-message {

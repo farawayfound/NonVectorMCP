@@ -178,6 +178,11 @@ _upsert_env_kv() {
 echo "==> aligning Library worker model defaults (${WORKER_MODEL}, ctx=${WORKER_CTX})"
 _upsert_env_kv "${REPO}/.env" "WORKER_OLLAMA_MODEL" "${WORKER_MODEL}"
 _upsert_env_kv "${REPO}/.env" "WORKER_OLLAMA_NUM_CTX" "${WORKER_CTX}"
+# If this host also runs chunkylink backend (common on nanobot), its startup
+# keepalive will load OLLAMA_MODEL into localhost Ollama. Align it too so no
+# background process re-loads legacy e4b after restart.
+_upsert_env_kv "${REPO}/.env" "OLLAMA_MODEL" "${WORKER_MODEL}"
+_upsert_env_kv "${REPO}/.env" "OLLAMA_NUM_CTX" "${WORKER_CTX}"
 _upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_MODEL" "${WORKER_MODEL}"
 _upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_NUM_CTX" "${WORKER_CTX}"
 

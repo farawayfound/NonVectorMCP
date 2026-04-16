@@ -264,20 +264,25 @@ export function SuggestionCarousel({
                 flipMod += ` suggestion-carousel-flip--scatter-${i % 4}`;
               }
 
+              const heroFaceYDeg =
+                isHero && pickHeroSlot != null
+                  ? -wrapRelDeg(pickHeroSlot * STEP_DEG + spinDegRef.current)
+                  : 0;
+              const flipStyle: React.CSSProperties = {};
+              if (visualMode === "intro") {
+                flipStyle.animationDelay = `${i * 0.04}s`;
+              }
+              if (isHero) {
+                (flipStyle as Record<string, string>)["--ama-pick-from"] = `${heroFaceYDeg}deg`;
+              }
+
               return (
                 <div
                   key={i}
                   className="suggestion-carousel-cell"
                   style={{ transform: `rotateY(${i * STEP_DEG}deg) translateZ(${RADIUS_PX}px)` }}
                 >
-                  <div
-                    className={`suggestion-carousel-flip${flipMod}`}
-                    style={
-                      visualMode === "intro"
-                        ? ({ animationDelay: `${i * 0.04}s` } as React.CSSProperties)
-                        : undefined
-                    }
-                  >
+                  <div className={`suggestion-carousel-flip${flipMod}`} style={flipStyle}>
                     <button
                       type="button"
                       ref={(el) => {

@@ -13,6 +13,13 @@ const PHASE_MIN_MS: Record<ChatPhase, number> = {
   answering: 0,
 };
 
+function isAbortError(err: unknown): boolean {
+  return (
+    (err instanceof DOMException && err.name === "AbortError") ||
+    (err instanceof Error && err.name === "AbortError")
+  );
+}
+
 export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask") {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState(false);
@@ -21,6 +28,10 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
 
   const send = useCallback(
     async (query: string, extra?: Record<string, unknown>) => {
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+
       const userMsg: ChatMessage = { role: "user", content: query };
       setMessages((prev) => [...prev, userMsg]);
       setStreaming(true);
@@ -29,7 +40,6 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
       const assistantMsg: ChatMessage = { role: "assistant", content: "", thinking: "" };
       setMessages((prev) => [...prev, assistantMsg]);
 
-      // Track phase timing so each phase is visible for its minimum duration
       let currentPhase: ChatPhase = "sending";
       let phaseStartTime = Date.now();
 
@@ -54,7 +64,7 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
         }
 
         let answering = false;
-        for await (const event of streamChat(endpoint, body)) {
+        for await (const event of streamChat(endpoint, body, { signal: ac.signal })) {
           if (event.phase) {
             if (event.phase === "search") {
               await transitionPhase("searching");
@@ -63,11 +73,11 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
             } else if (event.phase === "answering") {
               await transitionPhase("answering");
               answering = true;
-              // Mark thinking as done so the component collapses it
               setMessages((prev) => {
+                if (prev.length === 0) return prev;
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
-                if (last.role === "assistant" && last.thinking) {
+                if (last?.role === "assistant" && last.thinking) {
                   updated[updated.length - 1] = { ...last, thinkingDone: true };
                 }
                 return updated;
@@ -76,9 +86,10 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
           }
           if (typeof event.thinking === "string" && event.thinking.length > 0) {
             setMessages((prev) => {
+              if (prev.length === 0) return prev;
               const updated = [...prev];
               const last = updated[updated.length - 1];
-              if (last.role === "assistant") {
+              if (last?.role === "assistant") {
                 updated[updated.length - 1] = {
                   ...last,
                   thinking: (last.thinking || "") + event.thinking,
@@ -92,18 +103,20 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
               await transitionPhase("answering");
               answering = true;
               setMessages((prev) => {
+                if (prev.length === 0) return prev;
                 const updated = [...prev];
                 const last = updated[updated.length - 1];
-                if (last.role === "assistant" && last.thinking) {
+                if (last?.role === "assistant" && last.thinking) {
                   updated[updated.length - 1] = { ...last, thinkingDone: true };
                 }
                 return updated;
               });
             }
             setMessages((prev) => {
+              if (prev.length === 0) return prev;
               const updated = [...prev];
               const last = updated[updated.length - 1];
-              if (last.role === "assistant") {
+              if (last?.role === "assistant") {
                 updated[updated.length - 1] = { ...last, content: last.content + event.text };
               }
               return updated;
@@ -111,11 +124,15 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
           }
         }
       } catch (err) {
+        if (isAbortError(err)) {
+          return;
+        }
         const detail = err instanceof Error ? err.message : String(err);
         setMessages((prev) => {
+          if (prev.length === 0) return prev;
           const updated = [...prev];
           const last = updated[updated.length - 1];
-          if (last.role === "assistant") {
+          if (last?.role === "assistant") {
             const base = last.content.trim();
             updated[updated.length - 1] = {
               ...last,
@@ -127,21 +144,20 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
           return updated;
         });
       } finally {
-        // Finalize the assistant message — runs no matter how the stream ended.
+        if (abortRef.current === ac) {
+          abortRef.current = null;
+        }
         setMessages((prev) => {
+          if (prev.length === 0) return prev;
           const updated = [...prev];
           const last = updated[updated.length - 1];
           if (last?.role === "assistant") {
             const patched = { ...last };
 
-            // Always mark thinking as complete so the toggle never sticks on "Thinking…"
             if (patched.thinking) {
               patched.thinkingDone = true;
             }
 
-            // If the model produced only thinking content with no visible response
-            // (e.g. Ollama auto-separated and model spent all tokens on reasoning),
-            // move thinking into the response area so the user always sees something.
             if (!patched.content.trim() && patched.thinking) {
               patched.content = patched.thinking;
               patched.thinking = "";
@@ -159,8 +175,11 @@ export function useChat(endpoint: "/chat/ask" | "/chat/documents" = "/chat/ask")
   );
 
   const clear = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
     setMessages([]);
     setPhase("idle");
+    setStreaming(false);
   }, []);
 
   return { messages, streaming, phase, send, clear };

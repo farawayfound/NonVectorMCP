@@ -136,7 +136,7 @@ export function AskMeAnything() {
       window.setTimeout(() => {
         void baseSend(q);
         setPickHero(null);
-      }, 580);
+      }, 700);
     },
     [rateLimited, reduceMotion, baseSend],
   );
@@ -169,9 +169,12 @@ export function AskMeAnything() {
 
   const handleClear = useCallback(() => {
     if (messages.length === 0) return;
+    setPickHero(null);
+    setScatterAll(false);
     if (reduceMotion) {
       clearChat();
       setFirstTurnKind(null);
+      setThreadExiting(false);
       prevTurnsLenRef.current = 0;
       setCarouselSession((s) => s + 1);
       return;
@@ -249,14 +252,16 @@ export function AskMeAnything() {
                 <div key={`${i}-${t.user.content.slice(0, 40)}`} className="ama-turn">
                   <div className={qClass}>{t.user.content}</div>
                   {streaming && isLastTurn && phase !== "idle" && (
-                    <div className="ama-progress-wrap">
-                      <ChatProgress
-                        phase={phase}
-                        thinking={t.assistant.thinking || ""}
-                        minimizeThinking={
-                          phase === "answering" && (t.assistant.content?.length ?? 0) > 0
-                        }
-                      />
+                    <div className="ama-progress-track ama-progress-track--slide-open">
+                      <div className="ama-progress-inner">
+                        <ChatProgress
+                          phase={phase}
+                          thinking={t.assistant.thinking || ""}
+                          minimizeThinking={
+                            phase === "answering" && (t.assistant.content?.length ?? 0) > 0
+                          }
+                        />
+                      </div>
                     </div>
                   )}
                   <ChatMessageView
