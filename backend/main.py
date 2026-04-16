@@ -246,23 +246,6 @@ async def lifespan(app: FastAPI):
         log_event("ollama_startup_warm", model=settings.OLLAMA_MODEL)
     except Exception as exc:
         logging.warning("ollama startup warm failed (keepalive will retry): %s", exc)
-    # #region agent log
-    try:
-        _probe = _frontend_dist_probe()
-        _repo = Path(_probe["repo_root"])
-        _payload = {
-            "sessionId": "c921f0",
-            "timestamp": int(time.time() * 1000),
-            "location": "main.py:lifespan",
-            "message": "startup dist and git probe",
-            "hypothesisId": "H_A_H_B_H_C",
-            "runId": "pre-fix",
-            "data": _probe,
-        }
-        (_repo / "debug-c921f0.log").open("a", encoding="utf-8").write(json.dumps(_payload) + "\n")
-    except Exception as _agent_log_err:
-        logging.warning("debug-c921f0.log write failed: %s", _agent_log_err)
-    # #endregion
     # Keep the Ollama model warm so first-token latency stays predictable
     keepalive_task = asyncio.create_task(_model_keepalive())
     # Periodically clean up expired/inactive sessions and their user data

@@ -257,20 +257,6 @@ async function* streamOllamaPullPath(path: string, name: string): AsyncGenerator
     } catch {
       /* keep detail */
     }
-    // #region agent log
-    fetch("http://127.0.0.1:7517/ingest/bd8fe758-d961-4288-a376-8a2704de8add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c5b9ef" },
-      body: JSON.stringify({
-        sessionId: "c5b9ef",
-        hypothesisId: "H2",
-        location: "client.ts:streamOllamaPullPath",
-        message: "ollama pull non-ok",
-        data: { path, status: res.status, detailPreview: (detail || "").slice(0, 300) },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     throw new Error(detail || "Pull request failed");
   }
   const reader = res.body?.getReader();

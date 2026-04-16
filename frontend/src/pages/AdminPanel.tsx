@@ -631,6 +631,7 @@ function OllamaTab() {
   const [loadingModelWorker, setLoadingModelWorker] = useState<string | null>(null);
   const [unloadingModelWorker, setUnloadingModelWorker] = useState<string | null>(null);
   const [savingSuggModel, setSavingSuggModel] = useState(false);
+  const [workerConnFlash, setWorkerConnFlash] = useState<{ ok: boolean; msg: string } | null>(null);
   const [workerBaseDraft, setWorkerBaseDraft] = useState("");
   const [workerNumCtxDraft, setWorkerNumCtxDraft] = useState("");
   const [savingWorkerSettings, setSavingWorkerSettings] = useState(false);
@@ -844,13 +845,23 @@ function OllamaTab() {
   const handleSaveWorkerConnection = async () => {
     setSavingWorkerSettings(true);
     setError(null);
+    setWorkerConnFlash(null);
     try {
       const num = parseInt(workerNumCtxDraft, 10);
-      await putWorkerOllamaSettings({
+      const res = await putWorkerOllamaSettings({
         base_url: workerBaseDraft.trim(),
         ...(Number.isFinite(num) && num >= 512 ? { num_ctx: num } : {}),
       });
       workerConnDirty.current = false;
+      const ct = res.connection_test;
+      if (ct?.status === "ok") {
+        setWorkerConnFlash({ ok: true, msg: `Connected to ${ct.base_url}` });
+      } else if (ct?.status === "unreachable") {
+        setWorkerConnFlash({ ok: false, msg: `Settings saved but Ollama unreachable: ${ct.error}` });
+      } else if (ct?.status === "unconfigured") {
+        setWorkerConnFlash({ ok: false, msg: "No base URL configured." });
+      }
+      setTimeout(() => setWorkerConnFlash(null), 12000);
       await load();
     } catch (err: any) {
       setError(err.message || "Failed to save nanobot Ollama settings");
@@ -1209,8 +1220,28 @@ function OllamaTab() {
             disabled={savingWorkerSettings}
             onClick={handleSaveWorkerConnection}
           >
-            {savingWorkerSettings ? "Saving..." : "Save connection"}
+            {savingWorkerSettings ? "Testing connection..." : "Save connection"}
           </button>
+          {workerConnFlash && (
+            <div
+              style={{
+                marginTop: "0.5rem",
+                padding: "8px 12px",
+                background: workerConnFlash.ok
+                  ? "color-mix(in srgb, var(--success) 12%, var(--bg-card))"
+                  : "color-mix(in srgb, var(--danger) 10%, var(--bg-card))",
+                border: `1px solid ${workerConnFlash.ok
+                  ? "color-mix(in srgb, var(--success) 30%, var(--border))"
+                  : "color-mix(in srgb, var(--danger) 30%, var(--border))"}`,
+                borderRadius: "6px",
+                fontSize: "0.85rem",
+                color: workerConnFlash.ok ? "var(--success)" : "var(--danger)",
+                wordBreak: "break-all",
+              }}
+            >
+              {workerConnFlash.msg}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1230,6 +1261,27 @@ function OllamaTab() {
           <div className="stat-label">Worker num_ctx</div>
         </div>
       </div>
+
+      {wOllama.status === "unreachable" && wOllama.error && (
+        <div
+          style={{
+            marginTop: "0.75rem",
+            padding: "10px 14px",
+            background: "color-mix(in srgb, var(--danger) 10%, var(--bg-card))",
+            border: "1px solid color-mix(in srgb, var(--danger) 30%, var(--border))",
+            borderRadius: "6px",
+            fontSize: "0.85rem",
+          }}
+        >
+          <strong style={{ color: "var(--danger)" }}>Connection error:</strong>{" "}
+          <span style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>{wOllama.error}</span>
+          <p style={{ color: "var(--text-muted)", margin: "0.5rem 0 0", fontSize: "0.8rem" }}>
+            The backend server must be able to reach this URL. If the backend runs in Docker,
+            the container may not have access to the host LAN — check your Docker network mode
+            or use <code style={{ fontSize: "0.75rem" }}>network_mode: host</code> on the backend service.
+          </p>
+        </div>
+      )}
 
       <div style={{ margin: "1.5rem 0" }}>
         <h4 style={{ marginBottom: "0.5rem" }}>Active Model (Library synthesis)</h4>
