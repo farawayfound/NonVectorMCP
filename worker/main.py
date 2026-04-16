@@ -107,6 +107,7 @@ async def _preload_model() -> None:
                     "model": model,
                     "prompt": "",
                     "stream": False,
+                    "think": False,
                     "keep_alive": -1,
                     "options": {"num_ctx": num_ctx},
                 },

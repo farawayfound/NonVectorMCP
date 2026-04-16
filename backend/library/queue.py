@@ -24,7 +24,7 @@ _STREAM_JOBS = "library:jobs"
 _STREAM_STATUS_PREFIX = "library:status:"
 WORKER_OLLAMA_REDIS_KEY = "library:worker:ollama"
 _CANCEL_PREFIX = "library:cancel:"
-_CANCEL_TTL_SEC = 86400
+_CANCEL_TTL_SEC = 83200
 _GROUP = "workers"
 
 log = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ class RedisQueue(QueueBackend):
         key = self._status_key(update.job_id)
         payload = {k: str(v) for k, v in update.to_dict().items()}
         await self._r.xadd(key, payload, maxlen=50)
-        await self._r.expire(key, 86400)
+        await self._r.expire(key, 83200)
 
     async def get_latest_status(self, job_id: str) -> StatusUpdate | None:
         key = self._status_key(job_id)

@@ -633,7 +633,7 @@ async def admin_worker_ollama_settings(request: Request, user: dict = Depends(re
         "base_url": settings.WORKER_OLLAMA_BASE_URL,
         "resolved_base_url": resolved,
         "num_ctx": settings.WORKER_OLLAMA_NUM_CTX,
-        "model": settings.WORKER_OLLAMA_MODEL,
+        "model": settings.WORKER_OLLAMA_MODEL,olla
         "connection_test": conn_test,
     }
 

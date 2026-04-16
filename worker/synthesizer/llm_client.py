@@ -21,7 +21,13 @@ async def generate(
     model: str | None = None,
     num_ctx: int | None = None,
 ) -> str:
-    """Call Ollama /api/generate and return the full response text."""
+    """Call Ollama and return the assistant text.
+
+    Uses ``POST /api/chat`` with ``stream: false`` (not ``/api/generate``).  For
+    Gemma 4 and other thinking models, Ollama's generate endpoint can still leave
+    the visible field empty while filling ``thinking``; chat + top-level
+    ``think: false`` matches the known-good path from upstream issue discussion.
+    """
     use_model = model or config.OLLAMA_MODEL
     use_ctx = int(num_ctx) if num_ctx is not None else config.OLLAMA_NUM_CTX
     options: dict = {
@@ -30,38 +36,47 @@ async def generate(
     }
     if num_predict is not None:
         options["num_predict"] = int(num_predict)
+    elif len(prompt or "") + len(system or "") > 12000:
+        # Long synthesis prompts need enough output budget for a full report.
+        options["num_predict"] = 12288
+
+    messages: list[dict[str, str]] = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
     payload: dict = {
         "model": use_model,
-        "prompt": prompt,
+        "messages": messages,
         "stream": False,
-        # Top-level only — ``think`` inside ``options`` is ignored by Ollama.  Without this,
-        # thinking-capable models (e.g. ``gemma4:26b``) may spend the token budget in
-        # ``thinking`` and return an empty ``response``, which breaks the Library pipeline.
         "think": False,
+        "keep_alive": -1,
         "options": options,
     }
-    if system:
-        payload["system"] = system
 
     base = config.OLLAMA_BASE_URL.rstrip("/")
+    url = f"{base}/api/chat"
+    read_sec = float(max(int(config.OLLAMA_TIMEOUT), 900))
+    timeout = httpx.Timeout(connect=30.0, read=read_sec, write=30.0, pool=30.0)
     # #region agent log
     agent_log(
         hypothesis_id="H3",
         location="llm_client.py:generate:pre_http",
-        message="ollama_generate_start",
+        message="ollama_chat_start",
         data={
             "model": use_model,
             "num_ctx": use_ctx,
             "base_host": base.split("://")[-1][:80],
             "prompt_len": len(prompt or ""),
             "has_system": bool(system),
-            "timeout_sec": int(config.OLLAMA_TIMEOUT),
+            "read_timeout_sec": int(read_sec),
+            "endpoint": "/api/chat",
         },
     )
     # #endregion
     try:
-        async with httpx.AsyncClient(timeout=config.OLLAMA_TIMEOUT) as client:
-            resp = await client.post(f"{base}/api/generate", json=payload)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
             if data.get("error"):
@@ -71,27 +86,28 @@ async def generate(
         agent_log(
             hypothesis_id="H3",
             location="llm_client.py:generate:error",
-            message="ollama_generate_failed",
+            message="ollama_chat_failed",
             data={"model": use_model, "err_type": type(exc).__name__, "err": str(exc)[:500]},
         )
         # #endregion
         raise
 
-    text = data.get("response") or ""
-    think_raw = data.get("thinking") or ""
+    msg = data.get("message") or {}
+    text = str(msg.get("content") or "")
+    think_raw = str(msg.get("thinking") or "")
     # #region agent log
     agent_log(
         hypothesis_id="H3",
         location="llm_client.py:generate:success",
-        message="ollama_generate_done",
+        message="ollama_chat_done",
         data={
             "model": use_model,
             "response_len": len(text),
-            "thinking_len": len(str(think_raw)),
+            "thinking_len": len(think_raw),
         },
     )
     # #endregion
-    log.info("ollama generate: %d chars, model=%s", len(text), use_model)
+    log.info("ollama chat: %d chars, model=%s", len(text), use_model)
     return text
 
 

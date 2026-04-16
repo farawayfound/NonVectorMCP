@@ -130,7 +130,7 @@ class Settings:
         # ``WORKER_OLLAMA_BASE_URL`` may be overridden from admin_config.json (Ollama tab).
         self.WORKER_OLLAMA_BASE_URL = os.getenv("WORKER_OLLAMA_BASE_URL", "").strip()
         self.WORKER_OLLAMA_MODEL = os.getenv("WORKER_OLLAMA_MODEL", "gemma4:26b").strip()
-        self.WORKER_OLLAMA_NUM_CTX = int(os.getenv("WORKER_OLLAMA_NUM_CTX", "64000"))
+        self.WORKER_OLLAMA_NUM_CTX = int(os.getenv("WORKER_OLLAMA_NUM_CTX", "32000"))
         # Marker persisted to admin_config.json so legacy worker model defaults
         # are migrated once and never silently re-applied on subsequent restarts.
         self.WORKER_OLLAMA_MIGRATED_V2 = True
@@ -194,7 +194,7 @@ class Settings:
         """One-time migration for old worker defaults persisted in admin_config.
 
         Historical deployments stored ``gemma4:e4b`` + ``8192`` as the worker
-        model/context. New deployments default to ``gemma4:26b`` + ``64000``.
+        model/context. New deployments default to ``gemma4:26b`` + ``32000``.
         If that exact legacy pair is found and no migration marker exists yet,
         upgrade the values in-memory and in ``data`` so they are written back.
         """
@@ -211,7 +211,7 @@ class Settings:
         if not is_legacy_pair:
             return False
         self.WORKER_OLLAMA_MODEL = "gemma4:26b"
-        self.WORKER_OLLAMA_NUM_CTX = 64000
+        self.WORKER_OLLAMA_NUM_CTX = 32000
         self.WORKER_OLLAMA_MIGRATED_V2 = True
         data["worker_ollama_model"] = self.WORKER_OLLAMA_MODEL
         data["worker_ollama_num_ctx"] = self.WORKER_OLLAMA_NUM_CTX

@@ -123,7 +123,7 @@ fi
 DEFAULT_MODEL="gemma4:e4b"
 # Worker (nanobot) model defaults — must match what the nanobot GPU can handle.
 WORKER_MODEL="${DEPLOY_WORKER_OLLAMA_MODEL:-gemma4:26b}"
-WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-64000}"
+WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-32000}"
 if ollama list 2>/dev/null | grep -q "$DEFAULT_MODEL"; then
     ok "Model $DEFAULT_MODEL already present"
 else

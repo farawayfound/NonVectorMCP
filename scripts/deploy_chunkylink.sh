@@ -43,7 +43,7 @@ fi
 
 REPO="$(realpath "${REPO_RAW}")"
 WORKER_MODEL="${DEPLOY_WORKER_OLLAMA_MODEL:-gemma4:26b}"
-WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-64000}"
+WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-32000}"
 
 # Git 2.35+: sudo (root) + repo owned by ${OWNER} requires an explicit safe path.
 if ! command git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${REPO}"; then
@@ -160,7 +160,7 @@ else
   echo "==> skipping frontend build (DEPLOY_SKIP_NPM=${DEPLOY_SKIP_NPM:-0})"
 fi
 
-# ── Force worker LLM defaults to 26B / 64k on deploy ──────────────────────
+# ── Force worker LLM defaults to 26B / 32k on deploy ──────────────────────
 _upsert_env_kv() {
   local file="$1"
   local key="$2"
@@ -301,7 +301,7 @@ if [[ -n "${DOCKER_BIN}" && -f "${REPO}/${COMPOSE_REL}" ]]; then
   # often fails to allocate KV on real hardware; errors were previously hidden by >/dev/null.
   _PS_JSON=""
   _USED_CTX=""
-  for TRY_CTX in "${WORKER_CTX}" 98304 65536 64000 32768 16384; do
+  for TRY_CTX in "${WORKER_CTX}" 98304 65536 32000 32768 16384; do
     [[ -n "${_USED_CTX}" ]] && break
     echo "    warm load: model=${WORKER_MODEL} num_ctx=${TRY_CTX} (empty prompt, keep_alive=24h)..."
     _GEN_TMP="$(mktemp)"
@@ -341,7 +341,7 @@ sys.exit(1)
     echo "ERROR: Ollama runtime did not load ${WORKER_MODEL} into /api/ps after warm attempts."
     echo "    Current /api/ps:"
     echo "${_PS_JSON:-$(curl -sS -m 10 http://127.0.0.1:11434/api/ps || true)}"
-    echo "    If you use a very large num_ctx (e.g. 131072), try WORKER_OLLAMA_NUM_CTX=64000 in .env and redeploy,"
+    echo "    If you use a very large num_ctx (e.g. 131072), try WORKER_OLLAMA_NUM_CTX=32000 in .env and redeploy,"
     echo "    or run: ${DOCKER_BIN} compose -f ${COMPOSE_REL} logs ollama --tail 100"
     exit 1
   fi

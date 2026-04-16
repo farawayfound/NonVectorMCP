@@ -75,7 +75,7 @@ async def github_callback(request: Request, code: str = "", state: str = ""):
         response = RedirectResponse(f"{frontend}/")
         response.set_cookie(
             SESSION_COOKIE, token,
-            httponly=True, samesite="lax", max_age=30 * 86400,
+            httponly=True, samesite="lax", max_age=30 * 83200,
         )
         return response
     finally:
@@ -104,7 +104,7 @@ async def invite_login(request: Request):
         response = JSONResponse({"ok": True, "user_id": user_id})
         response.set_cookie(
             SESSION_COOKIE, token,
-            httponly=True, samesite="lax", max_age=30 * 86400,
+            httponly=True, samesite="lax", max_age=30 * 83200,
         )
         return response
     finally:
