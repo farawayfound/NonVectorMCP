@@ -42,6 +42,8 @@ if [[ ! -d "${REPO_RAW}" ]]; then
 fi
 
 REPO="$(realpath "${REPO_RAW}")"
+WORKER_MODEL="${DEPLOY_WORKER_OLLAMA_MODEL:-gemma4:26b}"
+WORKER_CTX="${DEPLOY_WORKER_OLLAMA_NUM_CTX:-131072}"
 
 # Git 2.35+: sudo (root) + repo owned by ${OWNER} requires an explicit safe path.
 if ! command git config --global --get-all safe.directory 2>/dev/null | grep -qxF "${REPO}"; then
@@ -156,6 +158,51 @@ if [[ "${DEPLOY_SKIP_NPM:-0}" != "1" && -f "${REPO}/frontend/package.json" ]]; t
   fi
 else
   echo "==> skipping frontend build (DEPLOY_SKIP_NPM=${DEPLOY_SKIP_NPM:-0})"
+fi
+
+# ── Force worker LLM defaults to 26B / 128k on deploy ──────────────────────
+_upsert_env_kv() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+  if grep -qE "^${key}=" "$file"; then
+    sed -i "s|^${key}=.*|${key}=${value}|g" "$file"
+  else
+    echo "${key}=${value}" >> "$file"
+  fi
+}
+
+echo "==> aligning Library worker model defaults (${WORKER_MODEL}, ctx=${WORKER_CTX})"
+_upsert_env_kv "${REPO}/.env" "WORKER_OLLAMA_MODEL" "${WORKER_MODEL}"
+_upsert_env_kv "${REPO}/.env" "WORKER_OLLAMA_NUM_CTX" "${WORKER_CTX}"
+_upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_MODEL" "${WORKER_MODEL}"
+_upsert_env_kv "${REPO}/.env.nanobot" "OLLAMA_NUM_CTX" "${WORKER_CTX}"
+
+# Persist runtime admin overrides so startup cannot re-seed stale e4b/8k.
+if [[ -x "${VENV}/bin/python" ]]; then
+  "${VENV}/bin/python" - "${REPO}" "${WORKER_MODEL}" "${WORKER_CTX}" <<'PY'
+import json
+import pathlib
+import sys
+
+repo = pathlib.Path(sys.argv[1])
+model = sys.argv[2]
+ctx = int(sys.argv[3])
+cfg = repo / "data" / "admin_config.json"
+if cfg.exists():
+    try:
+        data = json.loads(cfg.read_text(encoding="utf-8"))
+        data["worker_ollama_model"] = model
+        data["worker_ollama_num_ctx"] = ctx
+        data["worker_ollama_migrated_v2"] = True
+        cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"    updated {cfg}")
+    except Exception as exc:
+        print(f"WARNING: failed to update {cfg}: {exc}")
+PY
 fi
 
 echo "==> chown ${OWNER}:${OWNER} ${REPO}"

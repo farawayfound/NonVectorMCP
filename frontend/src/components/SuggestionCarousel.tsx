@@ -197,9 +197,6 @@ export function SuggestionCarousel({ pool, onSelect, paused = false }: Props) {
 
   return (
     <div className="suggestion-carousel" aria-label="Suggested questions carousel">
-      <p className="suggestion-carousel-hint">
-        Auto-spin pauses while you hover or drag · click a front card to ask
-      </p>
       <div
         ref={stageRef}
         className="suggestion-carousel-stage"

@@ -271,8 +271,8 @@ export function MyResume() {
         <p className="resume-hero__summary">
           Tenacious Software Engineer and US Air Force veteran with 7+ years of experience specializing in .NET, Azure,
           and AI integrations. Proven track record of leveraging llm's, knowlege ingestion prompt
-          engineering, and agentic workflows to accelerate enterprise software delivery. Passionate technology
-          evangelist skilled at designing scalable cloud architectures, translating stakeholder requirements into
+          engineering, and agentic workflows to accelerate enterprise software delivery. Passionate technologist 
+          skilled at designing scalable cloud architectures, translating stakeholder requirements into
           technical acceptance criteria, developing new AI tools to maximize productivity, and mentoring teams through
           implementation and adoption.
         </p>
