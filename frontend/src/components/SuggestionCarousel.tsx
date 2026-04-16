@@ -78,8 +78,10 @@ export function SuggestionCarousel({
   const rafRef = useRef(0);
   const lastTRef = useRef<number | null>(null);
   const edgePrimedRef = useRef(false);
-  const hintsLitRef = useRef(false);
-  const [hintsLit, setHintsLit] = useState(false);
+  const leftHintLitRef = useRef(false);
+  const rightHintLitRef = useRef(false);
+  const [leftHintLit, setLeftHintLit] = useState(false);
+  const [rightHintLit, setRightHintLit] = useState(false);
   const [draggingUI, setDraggingUI] = useState(false);
 
   /** Pause auto-spin + slot refresh (intro / pick / scatter). */
@@ -123,7 +125,8 @@ export function SuggestionCarousel({
       }
 
       const wrap = wrapRef.current;
-      let inEdge = false;
+      let leftLit = false;
+      let rightLit = false;
       if (wrap && !paused && !blockStageDrag && !draggingRef.current) {
         const wr = wrap.getBoundingClientRect();
         if (
@@ -134,12 +137,17 @@ export function SuggestionCarousel({
         ) {
           const edge = Math.min(DRAG_HINT_EDGE_PX, wr.width * 0.11);
           const lx = e.clientX - wr.left;
-          inEdge = lx < edge || lx > wr.width - edge;
+          leftLit = lx < edge;
+          rightLit = lx > wr.width - edge;
         }
       }
-      if (inEdge !== hintsLitRef.current) {
-        hintsLitRef.current = inEdge;
-        setHintsLit(inEdge);
+      if (leftLit !== leftHintLitRef.current) {
+        leftHintLitRef.current = leftLit;
+        setLeftHintLit(leftLit);
+      }
+      if (rightLit !== rightHintLitRef.current) {
+        rightHintLitRef.current = rightLit;
+        setRightHintLit(rightLit);
       }
     };
 
@@ -290,24 +298,43 @@ export function SuggestionCarousel({
 
   const wrapClass =
     "suggestion-carousel-wrap" +
-    (hintsLit && !paused && !blockStageDrag && !draggingUI
-      ? " suggestion-carousel-wrap--hints-lit"
-      : "") +
     (draggingUI ? " suggestion-carousel-wrap--dragging" : "") +
     (paused || blockStageDrag ? " suggestion-carousel-wrap--hints-muted" : "");
+
+  const hintSideLit = !paused && !blockStageDrag && !draggingUI;
+  const leftSideClass =
+    "suggestion-carousel-hint-side suggestion-carousel-hint-side--left" +
+    (leftHintLit && hintSideLit ? " suggestion-carousel-hint-side--lit" : "");
+  const rightSideClass =
+    "suggestion-carousel-hint-side suggestion-carousel-hint-side--right" +
+    (rightHintLit && hintSideLit ? " suggestion-carousel-hint-side--lit" : "");
 
   return (
     <div className="suggestion-carousel" aria-label="Suggested questions carousel">
       <div ref={wrapRef} className={wrapClass}>
         <div className="suggestion-carousel-hints" aria-hidden="true">
-          <span className="suggestion-carousel-hint-bar suggestion-carousel-hint-bar--left" />
-          <span className="suggestion-carousel-hint-bar suggestion-carousel-hint-bar--right" />
-          <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron--left">
-            {"<"}
-          </span>
-          <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron--right">
-            {">"}
-          </span>
+          <div className={leftSideClass}>
+            <div className="suggestion-carousel-hint-anchor">
+              <span className="suggestion-carousel-hint-bar" />
+              <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron-in">
+                {">"}
+              </span>
+              <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron-out">
+                {"<"}
+              </span>
+            </div>
+          </div>
+          <div className={rightSideClass}>
+            <div className="suggestion-carousel-hint-anchor">
+              <span className="suggestion-carousel-hint-bar" />
+              <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron-in">
+                {"<"}
+              </span>
+              <span className="suggestion-carousel-hint-chevron suggestion-carousel-hint-chevron-out">
+                {">"}
+              </span>
+            </div>
+          </div>
         </div>
         <div
           ref={stageRef}

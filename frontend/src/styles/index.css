@@ -237,80 +237,114 @@ body {
   pointer-events: none;
 }
 
+/* Left/right strips: each has its own bar + overlapped chevrons; hover is independent. */
+.suggestion-carousel-hint-side {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 52px;
+  pointer-events: none;
+}
+
+.suggestion-carousel-hint-side--left {
+  left: 0;
+}
+
+.suggestion-carousel-hint-side--right {
+  right: 0;
+}
+
+.suggestion-carousel-hint-anchor {
+  position: absolute;
+  inset: 0;
+  /* Bar + chevrons share horizontal center of strip */
+}
+
 .suggestion-carousel-hint-bar {
   position: absolute;
-  top: 14%;
-  bottom: 14%;
+  left: 50%;
   width: 5px;
+  margin-left: -2.5px;
   border-radius: 4px;
+  z-index: 0;
+  /* ~1/3 of prior span (72% → ~24%): short when idle */
+  top: 38%;
+  bottom: 38%;
   background: color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: inset 0 0 10px color-mix(in srgb, var(--text) 6%, transparent);
   transition:
+    top 0.36s cubic-bezier(0.34, 1.1, 0.64, 1),
+    bottom 0.36s cubic-bezier(0.34, 1.1, 0.64, 1),
     background 0.32s ease,
     box-shadow 0.32s ease,
     opacity 0.32s ease;
 }
 
-.suggestion-carousel-hint-bar--left {
-  left: 11px;
-}
-
-.suggestion-carousel-hint-bar--right {
-  right: 11px;
-}
-
-.suggestion-carousel-wrap--hints-lit .suggestion-carousel-hint-bar {
+/* Hovered side only: ~1/2 of original 72% bar span → 36% inner → 32% inset */
+.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-bar {
+  top: 32%;
+  bottom: 32%;
   background: color-mix(in srgb, var(--text) 22%, transparent);
   box-shadow:
     inset 0 0 14px color-mix(in srgb, var(--primary) 18%, transparent),
     0 0 20px color-mix(in srgb, var(--primary) 14%, transparent);
 }
 
+.suggestion-carousel-hint-chevron {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in srgb, var(--text-muted) 50%, transparent);
+  opacity: 0.26;
+  transform: translate(-50%, -50%);
+  transition:
+    transform 0.38s cubic-bezier(0.28, 1.35, 0.45, 1),
+    opacity 0.3s ease,
+    color 0.3s ease;
+}
+
+.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-chevron {
+  color: color-mix(in srgb, var(--text) 88%, transparent);
+  opacity: 0.94;
+}
+
+/* Left strip: overlap >|< at bar center; lit → < | > (outward / inward) */
+.suggestion-carousel-hint-side--left.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-chevron-out {
+  transform: translate(calc(-50% - 30px), -50%);
+}
+
+.suggestion-carousel-hint-side--left.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-chevron-in {
+  transform: translate(calc(-50% + 30px), -50%);
+}
+
+/* Right strip: overlap >|<; lit → < | > from this side’s perspective */
+.suggestion-carousel-hint-side--right.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-chevron-out {
+  transform: translate(calc(-50% + 30px), -50%);
+}
+
+.suggestion-carousel-hint-side--right.suggestion-carousel-hint-side--lit .suggestion-carousel-hint-chevron-in {
+  transform: translate(calc(-50% - 30px), -50%);
+}
+
 .suggestion-carousel-wrap--dragging .suggestion-carousel-hint-bar {
+  top: 38%;
+  bottom: 38%;
   background: color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: inset 0 0 10px color-mix(in srgb, var(--text) 5%, transparent);
   opacity: 0.55;
 }
 
-.suggestion-carousel-hint-chevron {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5em;
-  font-size: 1.28rem;
-  font-weight: 700;
-  line-height: 1;
-  color: color-mix(in srgb, var(--text-muted) 55%, transparent);
-  opacity: 0.28;
-  transition:
-    transform 0.34s cubic-bezier(0.34, 1.25, 0.64, 1),
-    opacity 0.3s ease,
-    color 0.3s ease;
-}
-
-.suggestion-carousel-hint-chevron--left {
-  left: 20px;
-  transform: translateX(0);
-}
-
-.suggestion-carousel-hint-chevron--right {
-  right: 20px;
-  transform: translateX(0);
-}
-
-.suggestion-carousel-wrap--hints-lit .suggestion-carousel-hint-chevron--left {
-  transform: translateX(-9px);
-  color: color-mix(in srgb, var(--text) 88%, transparent);
-  opacity: 0.92;
-}
-
-.suggestion-carousel-wrap--hints-lit .suggestion-carousel-hint-chevron--right {
-  transform: translateX(9px);
-  color: color-mix(in srgb, var(--text) 88%, transparent);
-  opacity: 0.92;
+.suggestion-carousel-wrap--dragging .suggestion-carousel-hint-side--lit .suggestion-carousel-hint-bar {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  box-shadow: inset 0 0 10px color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .suggestion-carousel-wrap--dragging .suggestion-carousel-hint-chevron {
-  transform: translateX(0);
+  transform: translate(-50%, -50%);
   color: color-mix(in srgb, var(--text-muted) 45%, transparent);
   opacity: 0.22;
 }

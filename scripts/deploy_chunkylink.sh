@@ -231,15 +231,40 @@ systemctl restart chunkylink
 sleep 2
 systemctl is-active chunkylink
 
-# ── Enforce nanobot Ollama runtime model after restart ──────────────────────
-if command -v curl &>/dev/null && command -v ollama &>/dev/null; then
-  echo "==> enforcing Ollama runtime model (${WORKER_MODEL}, ctx=${WORKER_CTX})"
-  # Best-effort: remove legacy model from memory if CLI supports stop.
-  if [[ "${WORKER_MODEL}" != "gemma4:e4b" ]]; then
-    ollama stop gemma4:e4b >/dev/null 2>&1 || true
+# ── Enforce a single Ollama runtime and target model ────────────────────────
+# Nanobot can end up with both:
+#   1) host systemd ollama.service
+#   2) docker compose ollama container on :11434
+# This causes model drift/conflicts (e.g. e4b keeps coming back).
+if command -v systemctl &>/dev/null; then
+  if systemctl list-unit-files 2>/dev/null | awk '{print $1}' | grep -qx 'ollama.service'; then
+    echo "==> disabling host ollama.service (docker ollama is the only runtime)"
+    systemctl stop ollama || true
+    systemctl disable ollama || true
   fi
-  # Ensure target model is present and warm it with desired context.
-  ollama pull "${WORKER_MODEL}" >/dev/null 2>&1 || true
+fi
+
+_nanobot_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    command -v docker
+    return 0
+  fi
+  local c
+  for c in /usr/bin/docker /usr/local/bin/docker /snap/bin/docker; do
+    [[ -x "$c" ]] && { echo "$c"; return 0; }
+  done
+  return 1
+}
+
+COMPOSE_REL="docker/docker-compose.nanobot.yml"
+DOCKER_BIN="$(_nanobot_docker || true)"
+if [[ -n "${DOCKER_BIN}" && -f "${REPO}/${COMPOSE_REL}" ]]; then
+  echo "==> enforcing Ollama runtime model in docker (${WORKER_MODEL}, ctx=${WORKER_CTX})"
+  # Ensure stack is up and only containerized Ollama serves :11434.
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" up -d >/dev/null 2>&1 || true
+  # Best-effort unload legacy model, pull target, warm with target context.
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama stop gemma4:e4b >/dev/null 2>&1 || true
+  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama pull "${WORKER_MODEL}" >/dev/null 2>&1 || true
   curl -sS "http://127.0.0.1:11434/api/generate" \
     -H "Content-Type: application/json" \
     -d "{\"model\":\"${WORKER_MODEL}\",\"prompt\":\"ok\",\"stream\":false,\"options\":{\"num_ctx\":${WORKER_CTX}},\"keep_alive\":\"24h\"}" \
