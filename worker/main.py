@@ -13,6 +13,7 @@ import httpx
 import config
 import sysstats
 from queue_consumer import QueueConsumer
+from synthesizer.llm_client import verify_ollama_model_tag
 
 _STATS_KEY_PREFIX = "worker:stats:"
 _STATS_TTL_SEC = 60
@@ -150,11 +151,13 @@ async def main() -> None:
     consumer = QueueConsumer(config.REDIS_URL, config.WORKER_ID)
     await consumer.connect()
     log.info(
-        "worker %s listening (Ollama model=%s num_ctx=%d from env — not Redis-overridden)",
+        "worker %s listening (Ollama base=%s model=%s num_ctx=%d)",
         config.WORKER_ID,
+        config.OLLAMA_BASE_URL,
         config.OLLAMA_MODEL,
         config.OLLAMA_NUM_CTX,
     )
+    await verify_ollama_model_tag()
 
     stats_task = asyncio.create_task(_publish_stats_loop(consumer))
 

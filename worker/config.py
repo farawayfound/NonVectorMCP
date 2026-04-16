@@ -18,12 +18,11 @@ M1_BASE_URL = _env("M1_BASE_URL", "http://localhost:8000")
 NANOBOT_API_KEY = _env("NANOBOT_API_KEY", "")
 
 # Ollama (runs locally on nanobot)
-# Library worker uses a fixed model/context (same as backend Settings defaults).
-# Override ``OLLAMA_BASE_URL`` via env/Docker when Ollama is not on localhost.
-OLLAMA_BASE_URL = _env("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = "gemma4:26b"
+# Defaults match production; set OLLAMA_MODEL / OLLAMA_NUM_CTX to match `ollama list` (wrong tag => HTTP 404 on /api/generate).
+OLLAMA_BASE_URL = _env("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
+OLLAMA_MODEL = _env("OLLAMA_MODEL", "gemma4:26b").strip() or "gemma4:26b"
 OLLAMA_TIMEOUT = int(_env("OLLAMA_TIMEOUT", "300"))
-OLLAMA_NUM_CTX = 32000
+OLLAMA_NUM_CTX = int(_env("OLLAMA_NUM_CTX", "32000") or "32000")
 
 # Crawling
 MAX_SEARCH_RESULTS = int(_env("MAX_SEARCH_RESULTS", "10"))
