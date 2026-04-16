@@ -277,19 +277,78 @@ if [[ -n "${DOCKER_BIN}" && -f "${REPO}/${COMPOSE_REL}" ]]; then
   echo "==> enforcing Ollama runtime model in docker (${WORKER_MODEL}, ctx=${WORKER_CTX})"
   # Ensure stack is up and only containerized Ollama serves :11434.
   "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" up -d >/dev/null 2>&1 || true
-  # Best-effort unload legacy model, pull target, warm with target context.
+  # Best-effort unload legacy model, pull target.
   "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama stop gemma4:e4b >/dev/null 2>&1 || true
-  "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama pull "${WORKER_MODEL}" >/dev/null 2>&1 || true
-  curl -sS "http://127.0.0.1:11434/api/generate" \
-    -H "Content-Type: application/json" \
-    -d "{\"model\":\"${WORKER_MODEL}\",\"prompt\":\"ok\",\"stream\":false,\"options\":{\"num_ctx\":${WORKER_CTX}},\"keep_alive\":\"24h\"}" \
-    >/dev/null || true
-  PS_JSON="$(curl -sS -m 10 http://127.0.0.1:11434/api/ps || true)"
-  if ! echo "${PS_JSON}" | grep -q "\"name\":\"${WORKER_MODEL}\""; then
-    echo "ERROR: Ollama runtime did not load ${WORKER_MODEL}. Current /api/ps:"
-    echo "${PS_JSON}"
+  if ! "${DOCKER_BIN}" compose -f "${COMPOSE_REL}" exec -T ollama ollama pull "${WORKER_MODEL}"; then
+    echo "WARNING: ollama pull ${WORKER_MODEL} failed — warm load may still work if the model is already present."
+  fi
+  # Wait until Ollama answers (compose returns before the server is always ready).
+  echo "    waiting for Ollama HTTP on :11434..."
+  _ollama_ready=0
+  for _i in {1..60}; do
+    if curl -sf -m 3 "http://127.0.0.1:11434/api/tags" >/dev/null 2>&1; then
+      _ollama_ready=1
+      break
+    fi
+    sleep 2
+  done
+  if [[ "${_ollama_ready}" -ne 1 ]]; then
+    echo "ERROR: Ollama did not become reachable on http://127.0.0.1:11434 within ~120s."
+    echo "    Check: ${DOCKER_BIN} compose -f ${COMPOSE_REL} ps && ${DOCKER_BIN} compose -f ${COMPOSE_REL} logs ollama --tail 80"
     exit 1
   fi
-  echo "    Ollama runtime loaded ${WORKER_MODEL}"
+  # Try configured num_ctx first, then smaller values. Very large ctx (e.g. 131072)
+  # often fails to allocate KV on real hardware; errors were previously hidden by >/dev/null.
+  _PS_JSON=""
+  _USED_CTX=""
+  for TRY_CTX in "${WORKER_CTX}" 98304 65536 64000 32768 16384; do
+    [[ -n "${_USED_CTX}" ]] && break
+    echo "    warm load: model=${WORKER_MODEL} num_ctx=${TRY_CTX} (empty prompt, keep_alive=24h)..."
+    _GEN_TMP="$(mktemp)"
+    _HTTP_CODE="$(curl -sS -m 1200 -o "${_GEN_TMP}" -w "%{http_code}" "http://127.0.0.1:11434/api/generate" \
+      -H "Content-Type: application/json" \
+      -d "{\"model\":\"${WORKER_MODEL}\",\"prompt\":\"\",\"stream\":false,\"think\":false,\"options\":{\"num_ctx\":${TRY_CTX}},\"keep_alive\":\"24h\"}" || true)"
+    if [[ "${_HTTP_CODE}" != "200" ]]; then
+      echo "WARNING: /api/generate HTTP ${_HTTP_CODE} for num_ctx=${TRY_CTX}; body:"
+      head -c 2000 "${_GEN_TMP}" || true
+      echo
+      rm -f "${_GEN_TMP}"
+      continue
+    fi
+    _GEN_ERR="$(python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p,encoding='utf-8')); print(d.get('error') or '')" "${_GEN_TMP}" 2>/dev/null || true)"
+    if [[ -n "${_GEN_ERR}" ]]; then
+      echo "WARNING: Ollama returned error for num_ctx=${TRY_CTX}: ${_GEN_ERR}"
+      rm -f "${_GEN_TMP}"
+      continue
+    fi
+    rm -f "${_GEN_TMP}"
+    sleep 2
+    _PS_JSON="$(curl -sS -m 15 "http://127.0.0.1:11434/api/ps" || true)"
+    if echo "${_PS_JSON}" | python3 -c '
+import json,sys
+want=sys.argv[1].strip()
+j=json.load(sys.stdin)
+for r in j.get("models") or []:
+    name=str(r.get("name") or r.get("model") or "").strip()
+    if name == want:
+        sys.exit(0)
+sys.exit(1)
+' "${WORKER_MODEL}" 2>/dev/null; then
+      _USED_CTX="${TRY_CTX}"
+    fi
+  done
+  if [[ -z "${_USED_CTX}" ]]; then
+    echo "ERROR: Ollama runtime did not load ${WORKER_MODEL} into /api/ps after warm attempts."
+    echo "    Current /api/ps:"
+    echo "${_PS_JSON:-$(curl -sS -m 10 http://127.0.0.1:11434/api/ps || true)}"
+    echo "    If you use a very large num_ctx (e.g. 131072), try WORKER_OLLAMA_NUM_CTX=64000 in .env and redeploy,"
+    echo "    or run: ${DOCKER_BIN} compose -f ${COMPOSE_REL} logs ollama --tail 100"
+    exit 1
+  fi
+  echo "    Ollama runtime loaded ${WORKER_MODEL} (warm num_ctx=${_USED_CTX})"
+  if [[ "${_USED_CTX}" != "${WORKER_CTX}" ]]; then
+    echo "WARNING: Deploy wanted num_ctx=${WORKER_CTX} but only num_ctx=${_USED_CTX} could be loaded."
+    echo "    Lower WORKER_OLLAMA_NUM_CTX / OLLAMA_NUM_CTX in .env to ${_USED_CTX} (or less) so the app matches Ollama."
+  fi
 fi
 echo "==> done. If NLP / categories changed: Admin → Demo KB → Build Index."
