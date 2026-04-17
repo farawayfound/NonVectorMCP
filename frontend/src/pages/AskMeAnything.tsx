@@ -45,7 +45,7 @@ export function AskMeAnything() {
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [rateLimited, setRateLimited] = useState(false);
 
-  const { flipping } = usePageTransition();
+  const { isExiting } = usePageTransition();
   const [pageReady, setPageReady] = useState(false);
   const [carouselVisual, setCarouselVisual] = useState<"intro" | "idle">("intro");
   const [carouselSession, setCarouselSession] = useState(0);
@@ -88,14 +88,14 @@ export function AskMeAnything() {
 
   // Wait for the page flip to finish before starting the carousel intro
   useEffect(() => {
-    if (flipping) {
+    if (isExiting) {
       setPageReady(false);
       return;
     }
     // Small delay to let the flip-in animation complete
     const t = window.setTimeout(() => setPageReady(true), 80);
     return () => window.clearTimeout(t);
-  }, [flipping]);
+  }, [isExiting]);
 
   useEffect(() => {
     if (!pageReady || reduceMotion || suggestionPool.length === 0) {

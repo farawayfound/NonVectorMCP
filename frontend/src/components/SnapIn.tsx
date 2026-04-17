@@ -8,35 +8,41 @@ interface Props {
   delay?: number;
   className?: string;
   style?: React.CSSProperties;
-  /** If true, skip animation (e.g. reduced-motion or already visible) */
   skip?: boolean;
 }
 
+// How long the snap-in CSS transition takes (must match index.css)
+const TRANSITION_MS = 620;
+
 /**
- * Wraps a section and snaps it in from the given viewport edge on mount.
- * Uses a CSS class toggle so it's GPU-composited and zero-JS-per-frame.
+ * Snaps a section in from the given viewport edge on mount, then strips
+ * the transform so scroll has no effect on the element afterward.
  */
 export function SnapIn({ children, from = "bottom", delay = 0, className = "", style, skip = false }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || skip) {
-      el?.classList.add("snap-in--visible");
+    if (!el) return;
+
+    if (skip || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      el.classList.add("snap-in--settled");
       return;
     }
 
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (prefersReduced) {
+    // Phase 1: trigger the slide in
+    const t1 = setTimeout(() => {
       el.classList.add("snap-in--visible");
-      return;
-    }
 
-    const timer = setTimeout(() => {
-      el.classList.add("snap-in--visible");
+      // Phase 2: after transition finishes, lock element in place with no transform
+      const t2 = setTimeout(() => {
+        el.classList.add("snap-in--settled");
+      }, TRANSITION_MS + 50);
+
+      return () => clearTimeout(t2);
     }, delay);
 
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t1);
   }, [delay, skip]);
 
   return (

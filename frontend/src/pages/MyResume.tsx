@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { SnapIn } from "../components/SnapIn";
+import { RotateIn } from "../components/RotateIn";
 
 const LINKEDIN = "https://linkedin.com/in/david-chui-co";
+const PORTFOLIO = "https://farawayfound.com";
+/** Served from site root (Vite `public/` → `dist/`); same URL on macmini via FastAPI static fallback. */
+const RESUME_PDF_HREF = "/DavidChui_Resume26.pdf";
+const RESUME_PDF_DOWNLOAD_AS = "DavidChui_Resume26.pdf";
 
 type ExperienceItem = {
   title: string;
@@ -27,21 +33,21 @@ const EXPERIENCE: ExperienceItem[] = [
     context:
       "Video Platform Operations team - tasked with building deployable AI tools and workflows.",
     summary:
-      "Builds production AI systems for video operations: Amazon Q–based triage assistants, local LLM runtimes, MCP servers with OCR/NLP indexing, self-learning knowledge bases, admin dashboards, and GitLab CI/CD—while mentoring teams on agentic development and presenting to senior leadership.",
+      "Builds production AI systems for video operations: Amazon Q–based triage assistants, local LLM runtimes, MCP servers with OCR/NLP ingestion, self-learning knowledge stores, admin dashboards, and GitLab CI/CD—while mentoring teams on agentic development and presenting to senior leadership.",
     bullets: [
       "Spearheaded AI ingestion pipelines, inference integrations, and self-updating knowledge indices for agentic technical triage assistants using Amazon Q (Claude 4.6) on AWS servers.",
       "Architected a scalable, low-cost local runtime framework for LLM models, reducing token utilization from hundreds of thousands of tokens per response to user configurable limits while providing internal teams with robust, secure, highly relevant, and economical AI context.",
-      "Engineered Model Context Protocol (MCP) and Agent Orchestrator physical server on intranet, automatically indexing data from shared Knowledge Base and work notes through OCR and NLP classification and providing tool use such as Database querying and API integrations.",
-      "Self-learning feature checks discovered data through triage sessions against existing indices and automatically adds version-controlled, managed chunks to a \u201clearned\u201d index.",
+      "Engineered Model Context Protocol (MCP) and Agent Orchestrator physical server on intranet, automatically ingesting data from shared Knowledge Base and work notes through OCR and NLP classification and providing tool use such as Database querying and API integrations.",
+      "Self-learning feature checks discovered data through triage sessions against existing indices and automatically adds version-controlled, editable chunks to a \u201clearned\u201d data store.",
+      "Automated reporting to preemptively link documented bugs to reported issues before human triage, saving engineering hours, facilitating investigations, and accelerating issue resolution.",
+      "Developed and scaled a data indexing framework across cross-functional teams to facilitate context enrichment and increase AI agents\u2019 usefulness and adoption.",
       "Built an administrator Dashboard to monitor MCP Server tools usage, Knowledge repository and source files management with index building options, structured database administration, client identities and authorizations, output quality monitoring, and catch warnings and errors.",
-      "Deployed cronjobs to detect updates and automate database updates and index rebuilds.",
-      "Administered the GitLab repository and CI/CD pipelines to ensure automated testing and seamless deployment of new features.",
+      "Deployed cronjobs to detect updates and automate database updates and index rebuilds upon changes to shared knowledge directories, empowering users to easily add knowledge to indices.",
+      "Managed GitLab repositories, actions, and CI/CD pipelines to ensure automated testing and seamless deployment of new features.",
       "Championed AI-augmented development by mentoring engineering teams on prompting best practices, establishing comprehensive guidelines for AI coding, OOP principles, and security.",
       "Presented projects to Directors, Vice President of Video Products Operations, and other stakeholders from proposal/planning, POC/MVP demos, to implementation summaries.",
       "Evaluated and fine tuned Agentic assistants into daily engineering workflows, accelerating technical debt resolution and contributing to reproducible fix actions.",
-      "Worked around constraints using routed and categorized JSON indices with symmetrical cross-referencing and configuring dual mode (local or MCP) searches based on access level.",
-      "Managed system health monitoring and Log Analysis through enterprise toolsets to ensure platform stability and proactive issue detection.",
-      "Triaged executive escalations and high complexity technical debt: translating high-pressure incidents into clear postmortem analysis and strategic resolution roadmaps.",
+      "Administered company-wide AI vector collections in Spectrum GPT.",
     ],
   },
   {
@@ -50,15 +56,14 @@ const EXPERIENCE: ExperienceItem[] = [
     dates: "July 2022 – July 2025",
     context: "Product Support Tier 3: developed internal projects and tools, fixed severe escalations.",
     summary:
-      "Owned full SDLC for a mission-critical C#.NET healthcare stack; automated compliance and operations (ServiceNow, PowerShell/Python, T-SQL) saving 500+ labor hours yearly; delivered 30+ billable customer engagements; and held 99.9% uptime with Kubernetes, Kafka, and disciplined postmortems.",
+      "Owned full SDLC for mission-critical C#.NET healthcare systems; hybrid ServiceNow/Java/Python automation saving 500+ labor hours yearly; 30+ billable customer deliveries; and 99.9% uptime with Kubernetes, Kafka, and disciplined incident response.",
     bullets: [
-      "Drove end-to-end SDLC for C#.NET monolith enhancements and critical fixes—requirements through production—with ServiceNow change management and Azure DevOps delivery.",
-      "Strengthened reliability using Splunk and Azure Data Warehouse to trace .NET and SQL exceptions, eliminate root causes, and avoid regressions on complex dependencies.",
-      "Sustained 99.9% uptime via Kubernetes and Kafka operations during major incidents, plus documented postmortems and preventive hardening.",
-      "Built HIPAA-compliant database patterns and executed large-scale migrations and merges in Azure Data Warehouse with query and distribution tuning for cost and performance.",
-      "Saved 500+ annual labor hours automating compliance reporting through ServiceNow APIs combined with PowerShell, Python, and advanced T-SQL.",
-      "Led 30+ billable customer projects from stakeholder scoping through go-live and post-deployment support, keeping timelines and quality aligned.",
-      "Closed 600+ high-priority service requests while capturing repeatable fixes and documentation that scaled junior engineers and cut repeat escalations.",
+      "Owned the full SDLC for C#.NET monoliths, driving change management in ServiceNow and source control in Azure DevOps.",
+      "Directed the successful delivery of over 30 billable customer projects, handling the entire lifecycle from stakeholder consultation to implementation and support.",
+      "Engineered a hybrid automation solution utilizing Java to interface with ServiceNow APIs and Python to execute complex compliance reporting logic, saving over 500 annual labor hours.",
+      "Ensured 99.9% uptime for a healthcare platform by managing Kubernetes clusters, load balancing nodes, and resetting Kafka pods during major incidents.",
+      "Architected HIPAA-compliant database environments locally and in Azure Data Warehouse, performing large-scale data migrations and merges.",
+      "Resolved over 600 high-priority service requests, triaging defects and leading postmortem analysis to prevent recurring outages and production incidents.",
     ],
   },
   {
@@ -67,13 +72,12 @@ const EXPERIENCE: ExperienceItem[] = [
     dates: "June 2021 – July 2022",
     context: "Technical Debt Management: triaged and resolved bugs, errors, and enhancement requests.",
     summary:
-      "Stabilized a .NET platform through 300+ high-quality tickets annually, GDPR-aware SQL operations, cross-stack diagnostics, internal enablement for Tier 1/CSM, and a localization launch for 400k+ international users.",
+      "Stabilized a .NET platform through cross-functional Agile delivery, 300+ high-quality tickets annually, GDPR-aware SQL operations, and a localization launch for 400k+ international users.",
     bullets: [
-      "Resolved 300+ Tier 2 and Tier 4 Jira tickets annually—including data fixes, stored procedure tuning, and code changes—with a 98% acceptance rate via Visual Studio and Azure DevOps sprints.",
-      "Protected customer trust with precision SQL remediation, controlled sensitive deletions, and validation aligned to GDPR expectations.",
-      "Diagnosed complex defects across APIs, Azure services, and third-party integrations using browser tooling, Postman, SendGrid, and Azure observability with SME collaboration.",
-      "Published reusable templates, scripts, and knowledge articles so Tier 1 and Customer Success closed recurring issues without engineering escalations.",
-      "Shipped a localization framework that introduced three new languages for 400,000+ international users.",
+      "Facilitated cross-functional collaboration in an Agile environment to diagnose and resolve integration issues across API endpoints, Azure infrastructure, and third-party services.",
+      "Designed a localization framework enabling 3 new languages for 400k+ international users.",
+      "Resolved 300+ Tier 2 and Tier 4 Jira tickets, including data fixes, stored procedure optimization, and code changes with a 98% acceptance rate.",
+      "Ensured GDPR compliance by running precision SQL scripts to fix data anomalies and manage the deletion of sensitive customer data.",
     ],
   },
   {
@@ -81,43 +85,27 @@ const EXPERIENCE: ExperienceItem[] = [
     company: "US Air Force",
     dates: "May 2017 – April 2021",
     context:
-      "Civil Engineering Squadron: maintained Nellis Air Force Base real property across structural trades.",
+      "Civil Engineering Squadron: maintained Nellis Air Force Base properties with multidisciplinary skills.",
     summary:
-      "Rotated through sheet metal, welding, carpentry, masonry, locksmithing, roofing, flooring, and finish work; led crews; mentored junior airmen; supported standby and ceremonial duties; and delivered visible squadron legacy projects.",
+      "Led structural maintenance crews, prioritized mission-critical work, mentored junior airmen, and represented the Air Force in high-stakes ceremonial duties.",
     bullets: [
-      "Led independent crews of three, optimizing workflows, delegating by proficiency, and prioritizing mission-critical work orders against resource limits.",
-      "Rotated quarterly across trades to sustain versatility maintaining base infrastructure in extreme operational conditions.",
-      "Stood one-week alert rotations every eight weeks—reachable within an hour—to support emergency response for breached perimeters and facility crises.",
-      "Mentored junior airmen on technical skills and professional growth away from home station.",
-      "USAF Honor Guard and Color Guard: executed 35+ high-stakes events, including 27 funeral ceremonies with firing party and pallbearer duties and eight major Las Vegas processions.",
-      "Designed and led a 15-foot mural at Lackland basic training lecture halls and created the 99th Civil Engineering Squadron commemorative coin.",
+      "Managed independent crews of structural apprentices, optimizing workflow and resource allocation to maintain real property on Nellis Air Force Base.",
+      "Prioritized mission-critical work according to impact and resource availability.",
+      "Mentored junior airmen on technical competency and professional development.",
+      "Selected for the USAF Honor Guard, leading over 35 high-stakes ceremonial events.",
     ],
   },
   {
-    title: "Wedding Photographer",
-    company: "Agaba Studios",
-    dates: "February 2016 – February 2017",
-    context: "Houston, TX — wedding and portrait photography with direct client ownership.",
-    summary:
-      "Partnered with couples on full wedding-day coverage, directed large groups on-site, and balanced studio assignments with independent creative work.",
-    bullets: [
-      "Delivered 12 weddings and 15 engagement sessions with structured planning, timeline control, and consistent client communication.",
-      "Directed large groups across venues to capture essential moments efficiently while maintaining a calm, service-oriented presence.",
-      "Produced independent landscape, portrait, and senior photography projects alongside studio commitments.",
-    ],
-  },
-  {
-    title: "Co-Founder, Chief Technology Officer",
+    title: "Co-Founder, Chief Engineer",
     company: "Krate Technologies LLC",
-    dates: "December 2013 – October 2016",
+    dates: "January 2014 – October 2016",
     context:
-      "Agile 3D printing, CAD, and fabrication studio serving B2B/B2C clients with rapid prototypes and embedded (Arduino) solutions.",
+      "Founded start-up 3D printing, CAD, and fabrication firm aimed to fill a local need for rapid prototyping.",
     summary:
-      "Co-founded a rapid-prototyping startup: owned roadmap and delivery, mentored a tiny technical team, and shipped high-touch hardware projects from Maker's Cafe operations.",
+      "Co-founded a rapid-prototyping studio: owned roadmap and client delivery while adapting hands-on across CAD, fabrication, and novel engineering challenges.",
     bullets: [
-      "Defined the roadmap and ran projects from requirements through client review with short feedback loops and integrated operations.",
-      "Delivered notable builds including architectural models for Matt Fajkus Architecture, research-oriented 3D scanning for UT/Blanton Museum collaborators, and complex wearable/mechanical prototypes.",
-      "Operated as hands-on CTO across CAD, FDM printing, and Arduino-backed embedded work, adapting quickly to novel fabrication challenges.",
+      "Formulate business roadmap, manage projects from defining requirements to review.",
+      "Technical expert, learning on the job daily and adapting to different problems.",
     ],
   },
 ];
@@ -165,105 +153,6 @@ const TECHNICAL_SKILLS = {
   "Tools & Platforms":
     "SSMS, MongoDB, Claude Code, VS/Code, Ollama/LMS, Linux, Splunk, Jira",
 };
-
-/**
- * Scroll-driven 270° rotateX reveal.
- *
- * The section starts lying flat (rotateX = 90deg, perpendicular to the screen,
- * bottom edge toward the viewer). As it scrolls toward the viewport center it
- * sweeps 270° — passing through the back face — and locks at rotateX = 0deg
- * (fully upright) once the section center reaches the viewport center.
- * Scrolling back up reverses the rotation exactly.
- *
- * Progress mapping:
- *   0   → section center at bottom of viewport  → rotateX = 90deg  (flat, entering)
- *   0.5 → section center at viewport center     → rotateX = 0deg   (locked, readable)
- *   1   → section center at top of viewport     → rotateX = -180deg (past, exiting upward)
- *
- * We clamp at 0deg once progress >= 0.5 so the section stays static while
- * centered or above center.
- */
-function useScrollRotate(scrollContainerRef: React.RefObject<HTMLElement | null>, containerReady: boolean) {
-  const sectionRefs = useRef<(HTMLElement | null)[]>([]);
-  const rafRef = useRef(0);
-
-  const register = (el: HTMLElement | null, index: number) => {
-    sectionRefs.current[index] = el;
-  };
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    if (!container) return;
-
-    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    const update = () => {
-      const vh = container.clientHeight;
-
-      sectionRefs.current.forEach((el) => {
-        if (!el) return;
-
-        if (prefersReduced) {
-          el.style.transform = "";
-          el.style.opacity = "1";
-          return;
-        }
-
-        const rect = el.getBoundingClientRect();
-        // Center of the section relative to the viewport
-        const sectionCenter = rect.top + rect.height / 2;
-        // progress: 0 when center is at bottom of viewport, 0.5 when at viewport center
-        const progress = 1 - sectionCenter / vh;
-
-        let deg: number;
-        if (progress <= 0) {
-          // Below viewport — flat, perpendicular
-          deg = 90;
-        } else if (progress >= 0.5) {
-          // At or above center — fully upright, locked
-          deg = 0;
-        } else {
-          // Sweeping: progress 0→0.5 maps to rotateX 90→0
-          // 270° total sweep compressed into the 0→0.5 progress window:
-          // at progress=0: 90deg (flat)
-          // at progress=0.5: 0deg (upright)
-          // The 270° arc goes: 90 → 0 → -90 → -180 → ... but we want to
-          // arrive at 0 after a 270° journey, so we start at 90 + 270 = 360
-          // and sweep down to 0. Equivalently: start = 360deg, end = 0deg.
-          // But 360deg = 0deg visually, so we use the range 270→0 mapped
-          // to progress 0→0.5, which gives a 270° sweep arriving at 0.
-          const t = progress / 0.5; // 0→1
-          deg = 270 * (1 - t);
-        }
-
-        el.style.transformOrigin = "center top";
-        el.style.transform = `perspective(1200px) rotateX(${deg}deg)`;
-        // Fade in as it approaches upright — invisible when fully flat, opaque when upright
-        const opacity = progress <= 0 ? 0 : Math.min(1, progress / 0.35);
-        el.style.opacity = String(opacity);
-      });
-
-      rafRef.current = 0;
-    };
-
-    const onScroll = () => {
-      if (!rafRef.current) {
-        rafRef.current = requestAnimationFrame(update);
-      }
-    };
-
-    container.addEventListener("scroll", onScroll, { passive: true });
-    // Run once on mount to set initial state
-    update();
-
-    return () => {
-      container.removeEventListener("scroll", onScroll);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [scrollContainerRef, containerReady]);
-
-  return register;
-}
 
 function ExpandableCard({
   id,
@@ -322,109 +211,167 @@ function ExpandableCard({
   );
 }
 
+/* ── Stagger timing helpers ──────────────────────────────── */
+const BASE_DELAY = 0;       // hero starts immediately
+const TITLE_GAP = 80;       // gap between stagger groups
+const CARD_STAGGER = 100;   // gap between individual cards within a section
+
 export function MyResume() {
-  // The scroll container is .app-main
-  const scrollContainerRef = useRef<HTMLElement | null>(null);
-  const pageRef = useRef<HTMLDivElement>(null);
-  const [containerReady, setContainerReady] = useState(false);
+  // Cumulative delay tracker for cascading animations
+  let d = BASE_DELAY;
 
-  useEffect(() => {
-    const el = pageRef.current?.closest(".app-main") as HTMLElement | null;
-    scrollContainerRef.current = el;
-    setContainerReady(true);
-  }, []);
+  // Hero
+  const heroDelay = d;
+  d += 200;
 
-  const register = useScrollRotate(scrollContainerRef, containerReady);
+  // Technical Skills title
+  const skillsTitleDelay = d;
+  d += TITLE_GAP;
 
-  const setRef = (i: number) => (el: HTMLElement | null) => {
-    register(el, i);
-  };
+  // Technical Skills rows (3)
+  const skillEntries = Object.entries(TECHNICAL_SKILLS) as [string, string][];
+  const skillDelays = skillEntries.map((_, i) => d + i * CARD_STAGGER);
+  d = skillDelays[skillDelays.length - 1] + CARD_STAGGER;
+
+  // Experience title
+  const expTitleDelay = d;
+  d += TITLE_GAP;
+
+  // Experience cards (5)
+  const expDelays = EXPERIENCE.map((_, i) => d + i * CARD_STAGGER);
+  d = expDelays[expDelays.length - 1] + CARD_STAGGER;
+
+  // Education title
+  const eduTitleDelay = d;
+  d += TITLE_GAP;
+
+  // Education cards (3)
+  const eduDelays = EDUCATION.map((_, i) => d + i * CARD_STAGGER);
+  d = eduDelays[eduDelays.length - 1] + CARD_STAGGER;
+
+  // Certifications title
+  const certTitleDelay = d;
+  d += TITLE_GAP;
+  const certDelay = d;
 
   return (
-    <div className="resume-page resume-page--scroll-anim" ref={pageRef}>
-      <header className="resume-hero" ref={setRef(0)}>
-        <h1 className="resume-hero__name">David Chui</h1>
-        <p className="resume-hero__contact">
-          <span>Denver, CO</span>
-          <span className="resume-hero__sep">|</span>
-          <a href="tel:+13035202666">(303) 520-2666</a>
-          <span className="resume-hero__sep">|</span>
-          <a href="mailto:david.chui@outlook.com">david.chui@outlook.com</a>
-          <span className="resume-hero__sep">|</span>
-          <a href={LINKEDIN} target="_blank" rel="noopener noreferrer">
-            linkedin.com/in/david-chui-co
-          </a>
-        </p>
-        <p className="resume-hero__summary">
-          Tenacious Software Engineer and US Air Force veteran with 7+ years of experience specializing in .NET, Azure,
-          and AI integrations. Proven track record of leveraging llm's, knowlege ingestion prompt
-          engineering, and agentic workflows to accelerate enterprise software delivery. Passionate technologist{" "}
-          skilled at designing scalable cloud architectures, translating stakeholder requirements into
-          technical acceptance criteria, developing new AI tools to maximize productivity, and mentoring teams through
-          implementation and adoption.
-        </p>
-      </header>
+    <div className="resume-page">
+      {/* ── Hero ── */}
+      <SnapIn from="top" delay={heroDelay}>
+        <header className="resume-hero">
+          <div className="resume-hero__headline">
+            <h1 className="resume-hero__name">David Chui</h1>
+            <a
+              className="tab resume-hero__download"
+              href={RESUME_PDF_HREF}
+              download={RESUME_PDF_DOWNLOAD_AS}
+              aria-label="Download résumé as PDF"
+            >
+              Download
+            </a>
+          </div>
+          <p className="resume-hero__contact">
+            <a href={PORTFOLIO} target="_blank" rel="noopener noreferrer">
+              farawayfound.com
+            </a>
+            <span className="resume-hero__sep">|</span>
+            <a href="tel:+13035202666">(303) 520-2666</a>
+            <span className="resume-hero__sep">|</span>
+            <a href="mailto:david.chui@outlook.com">david.chui@outlook.com</a>
+            <span className="resume-hero__sep">|</span>
+            <a href={LINKEDIN} target="_blank" rel="noopener noreferrer">
+              linkedin.com/in/david-chui-co
+            </a>
+          </p>
+          <p className="resume-hero__summary">
+            Tenacious Software Engineer and US Air Force veteran with 5+ years of experience specializing in .NET, Azure,
+            and AI-assisted development. Proven track record of leveraging large language models, advanced prompt
+            engineering, and agentic coding workflows to accelerate enterprise software delivery. Passionate technologist{" "}
+            skilled at designing scalable cloud architectures, translating stakeholder requirements into technical acceptance
+            criteria, developing new AI tools to maximize productivity, and mentoring teams through implementation and
+            adoption.
+          </p>
+        </header>
+      </SnapIn>
 
-      <section className="resume-block" ref={setRef(1)} aria-labelledby="resume-skills-heading">
-        <h2 id="resume-skills-heading" className="resume-block__title">
-          Technical Skills
-        </h2>
+      {/* ── Technical Skills ── */}
+      <section className="resume-block" aria-labelledby="resume-skills-heading">
+        <SnapIn from="left" delay={skillsTitleDelay}>
+          <h2 id="resume-skills-heading" className="resume-block__title">
+            Technical Skills
+          </h2>
+        </SnapIn>
         <div className="resume-skills">
-          {(Object.entries(TECHNICAL_SKILLS) as [string, string][]).map(([label, value]) => (
-            <div key={label} className="resume-skill-row">
-              <span className="resume-skill-row__label">{label}</span>
-              <span className="resume-skill-row__value">{value}</span>
-            </div>
+          {skillEntries.map(([label, value], i) => (
+            <RotateIn key={label} delay={skillDelays[i]}>
+              <div className="resume-skill-row">
+                <span className="resume-skill-row__label">{label}</span>
+                <span className="resume-skill-row__value">{value}</span>
+              </div>
+            </RotateIn>
           ))}
         </div>
       </section>
 
-      <section className="resume-block" ref={setRef(2)} aria-labelledby="resume-exp-heading">
-        <h2 id="resume-exp-heading" className="resume-block__title">
-          Experience
-        </h2>
+      {/* ── Experience ── */}
+      <section className="resume-block" aria-labelledby="resume-exp-heading">
+        <SnapIn from="right" delay={expTitleDelay}>
+          <h2 id="resume-exp-heading" className="resume-block__title">
+            Experience
+          </h2>
+        </SnapIn>
         <div className="resume-stack">
           {EXPERIENCE.map((job, i) => (
-            <ExpandableCard
-              key={`${job.company}-${job.dates}`}
-              id={`exp-${i}`}
-              headline={`${job.title} | ${job.company}`}
-              meta={job.dates}
-              context={job.context}
-              summary={job.summary}
-              bullets={job.bullets}
-            />
+            <RotateIn key={`${job.company}-${job.dates}`} delay={expDelays[i]}>
+              <ExpandableCard
+                id={`exp-${i}`}
+                headline={`${job.title} | ${job.company}`}
+                meta={job.dates}
+                context={job.context}
+                summary={job.summary}
+                bullets={job.bullets}
+              />
+            </RotateIn>
           ))}
         </div>
       </section>
 
-      <section className="resume-block" ref={setRef(3)} aria-labelledby="resume-edu-heading">
-        <h2 id="resume-edu-heading" className="resume-block__title">
-          Education
-        </h2>
+      {/* ── Education ── */}
+      <section className="resume-block" aria-labelledby="resume-edu-heading">
+        <SnapIn from="left" delay={eduTitleDelay}>
+          <h2 id="resume-edu-heading" className="resume-block__title">
+            Education
+          </h2>
+        </SnapIn>
         <div className="resume-stack">
           {EDUCATION.map((edu, i) => (
-            <ExpandableCard
-              key={`${edu.school}-${edu.year}`}
-              id={`edu-${i}`}
-              headline={`${edu.degree} | ${edu.school}`}
-              meta={edu.year}
-              summary={edu.summary}
-              bullets={edu.bullets ?? []}
-            />
+            <RotateIn key={`${edu.school}-${edu.year}`} delay={eduDelays[i]}>
+              <ExpandableCard
+                id={`edu-${i}`}
+                headline={`${edu.degree} | ${edu.school}`}
+                meta={edu.year}
+                summary={edu.summary}
+                bullets={edu.bullets ?? []}
+              />
+            </RotateIn>
           ))}
         </div>
       </section>
 
-      <section className="resume-block resume-block--last" ref={setRef(4)} aria-labelledby="resume-cert-heading">
-        <h2 id="resume-cert-heading" className="resume-block__title">
-          Certifications
-        </h2>
-        <ul className="resume-cert-list">
-          {CERTIFICATIONS.map((c) => (
-            <li key={c}>{c}</li>
-          ))}
-        </ul>
+      {/* ── Certifications ── */}
+      <section className="resume-block resume-block--last" aria-labelledby="resume-cert-heading">
+        <SnapIn from="right" delay={certTitleDelay}>
+          <h2 id="resume-cert-heading" className="resume-block__title">
+            Certifications
+          </h2>
+        </SnapIn>
+        <RotateIn delay={certDelay}>
+          <ul className="resume-cert-list">
+            {CERTIFICATIONS.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </RotateIn>
       </section>
     </div>
   );

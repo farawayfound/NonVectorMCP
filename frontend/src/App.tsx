@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { Layout } from "./components/Layout";
@@ -11,58 +10,53 @@ import { About } from "./pages/About";
 import { MyResume } from "./pages/MyResume";
 import { Library } from "./pages/Library";
 import { PageTransitionProvider } from "./components/PageTransitionContext";
-import { FlipTransition } from "./components/FlipTransition";
 
 export default function App() {
   const { user, loading, githubEnabled, loginInvite, logout } = useAuth();
-  const appRef = useRef<HTMLDivElement>(null);
 
   return (
     <PageTransitionProvider>
       <BrowserRouter>
-        <div ref={appRef} style={{ display: "contents" }}>
-          <Layout user={user} onLogout={logout}>
-            <Routes>
-              <Route path="/" element={<AskMeAnything />} />
-              <Route path="/about" element={<About />} />
-              <Route path="/resume" element={<MyResume />} />
-              <Route
-                path="/login"
-                element={
-                  user ? <Navigate to="/" replace /> : (
-                    <Login onLoginInvite={loginInvite} githubEnabled={githubEnabled} />
-                  )
-                }
-              />
-              <Route
-                path="/workspace"
-                element={
-                  <AuthGuard user={user} loading={loading}>
-                    <Workspace />
-                  </AuthGuard>
-                }
-              />
-              <Route path="/documents" element={<Navigate to="/workspace" replace />} />
-              <Route
-                path="/library"
-                element={
-                  <AuthGuard user={user} loading={loading}>
-                    <Library />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <AuthGuard user={user} loading={loading} requireAdmin>
-                    <AdminPanel />
-                  </AuthGuard>
-                }
-              />
-            </Routes>
-          </Layout>
-        </div>
-        <FlipTransition appRef={appRef} />
+        <Layout user={user} onLogout={logout}>
+          <Routes>
+            <Route path="/" element={<AskMeAnything />} />
+            <Route path="/about" element={<About />} />
+            <Route path="/resume" element={<MyResume />} />
+            <Route
+              path="/login"
+              element={
+                user ? <Navigate to="/" replace /> : (
+                  <Login onLoginInvite={loginInvite} githubEnabled={githubEnabled} />
+                )
+              }
+            />
+            <Route
+              path="/workspace"
+              element={
+                <AuthGuard user={user} loading={loading}>
+                  <Workspace />
+                </AuthGuard>
+              }
+            />
+            <Route path="/documents" element={<Navigate to="/workspace" replace />} />
+            <Route
+              path="/library"
+              element={
+                <AuthGuard user={user} loading={loading}>
+                  <Library />
+                </AuthGuard>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <AuthGuard user={user} loading={loading} requireAdmin>
+                  <AdminPanel />
+                </AuthGuard>
+              }
+            />
+          </Routes>
+        </Layout>
       </BrowserRouter>
     </PageTransitionProvider>
   );
