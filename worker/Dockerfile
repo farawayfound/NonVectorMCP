@@ -1,5 +1,9 @@
 FROM python:3.12-slim
 
+# Unbuffered stdout/stderr so `docker logs` shows output in real time
+# (default Python buffers stdout when it's a pipe, causing long silence during jobs).
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

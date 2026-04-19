@@ -31,7 +31,7 @@ Path: **`/srv/chunkylink/repo/.env.nanobot`** (see **`.env.nanobot.example`** in
 | **`NANOBOT_API_KEY`** | Must match **`NANOBOT_API_KEY`** on the Mac **`.env`**. | Mismatch → 403 on worker callbacks. |
 | **`OLLAMA_BASE_URL`** | Where **this worker process** reaches Ollama. In compose, usually **`http://ollama:11434`**. | Host-only IP only if Ollama is not the compose service. |
 | **`OLLAMA_MODEL`** | Must match **`ollama list`** **inside** the `ollama` container. | Wrong tag → **HTTP 404** on `POST /api/generate`. |
-| **`OLLAMA_NUM_CTX`** | Default **65536** (64k) in repo; must fit GPU VRAM + Docker memory for `gemma4:26b`. | If Ollama refuses to load, lower (e.g. 32768) in `.env.nanobot` and recreate the worker. |
+| **`OLLAMA_NUM_CTX`** | Default **24576** (24k) in repo; must fit GPU VRAM + Docker memory for `gemma4:26b`. | If Ollama refuses to load or OOMs, lower (e.g. 16384) in `.env.nanobot` and recreate the worker. |
 
 **Docker Compose note:** `docker/docker-compose.nanobot.yml` must **not** override **`OLLAMA_BASE_URL`** in a hardcoded `environment:` block — that prevented **`.env.nanobot`** from taking effect (fixed in repo: only **`env_file`** drives the worker).
 
