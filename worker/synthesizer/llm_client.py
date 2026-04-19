@@ -73,13 +73,15 @@ async def generate(
     model: str | None = None,
     num_ctx: int | None = None,
 ) -> str:
-    """Call Ollama ``/api/generate`` (non-streaming) and return the response text.
+    """Call Ollama ``/api/generate`` (streaming) and return the full response text.
 
-    Same shape as pre–Force-26B / Carousel-era worker code.  For ``gemma4:26b``,
-    ``think: false`` must be top-level so the model fills ``response`` instead of
-    only ``thinking``.  Surfaces JSON ``error`` and falls back to ``thinking`` if
-    ``response`` is empty.
+    Streaming keeps bytes flowing token-by-token, preventing httpx ReadTimeout
+    from firing during long generations.  Each newline-delimited JSON chunk
+    contains ``response`` (token) or ``done: true`` with final stats.
+    For ``gemma4:26b``, ``think: false`` must be top-level.
     """
+    import json as _json
+
     use_model = model or config.OLLAMA_MODEL
     use_ctx = int(num_ctx) if num_ctx is not None else config.OLLAMA_NUM_CTX
     options: dict = {
@@ -92,7 +94,7 @@ async def generate(
     payload: dict = {
         "model": use_model,
         "prompt": prompt,
-        "stream": False,
+        "stream": True,
         "think": False,
         "options": options,
     }
@@ -100,29 +102,41 @@ async def generate(
         payload["system"] = system
 
     read_sec = float(config.OLLAMA_TIMEOUT)
+    # Per-chunk read timeout; each token resets the clock so long generations are safe.
     timeout = httpx.Timeout(connect=30.0, read=read_sec, write=30.0, pool=30.0)
     url = _ollama_generate_url()
+
+    chunks: list[str] = []
+    eval_count: int | None = None
+    prompt_eval_count: int | None = None
+
     async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
-        resp = await client.post(url, json=payload)
-        try:
-            resp.raise_for_status()
-        except httpx.HTTPStatusError as exc:
-            raise RuntimeError(_format_ollama_http_error(exc.response, model=use_model)) from exc
-        data = resp.json()
-        if data.get("error"):
-            raise RuntimeError(str(data["error"]).strip())
+        async with client.stream("POST", url, json=payload) as resp:
+            try:
+                resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise RuntimeError(_format_ollama_http_error(exc.response, model=use_model)) from exc
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+                try:
+                    chunk = _json.loads(line)
+                except _json.JSONDecodeError:
+                    continue
+                if chunk.get("error"):
+                    raise RuntimeError(str(chunk["error"]).strip())
+                token = chunk.get("response") or chunk.get("thinking") or ""
+                if token:
+                    chunks.append(token)
+                if chunk.get("done"):
+                    eval_count = chunk.get("eval_count")
+                    prompt_eval_count = chunk.get("prompt_eval_count")
 
-    text = str(data.get("response") or "").strip()
-    thinking = str(data.get("thinking") or "").strip()
-    if not text and thinking:
-        log.warning(
-            "ollama generate: empty response, using thinking (%d chars), model=%s",
-            len(thinking),
-            use_model,
-        )
-        text = thinking
-
-    log.info("ollama generate: %d chars, model=%s", len(text), use_model)
+    text = "".join(chunks).strip()
+    log.info(
+        "ollama generate: %d chars, prompt_tokens=%s, eval_tokens=%s, model=%s",
+        len(text), prompt_eval_count, eval_count, use_model,
+    )
     return text
 
 
