@@ -1,5 +1,24 @@
 # -*- coding: utf-8 -*-
 """System prompts and templates for the synthesis pipeline."""
+from datetime import datetime
+
+
+def current_date_context() -> str:
+    """One-line date anchor so the LLM can resolve relative dates.
+
+    Sourced from the worker host clock — single-box deployment means this
+    is the authoritative "now" for the pipeline.
+    """
+    return f"Current date: {datetime.now().strftime('%Y-%m-%d (%A)')}"
+
+
+_DATE_INSTRUCTION = (
+    "Interpret any relative dates in the user prompt or sources "
+    "(today, yesterday, this week, last month, this year, recent, etc.) "
+    "against the current date above. When a source's publication date is "
+    "known, prefer sources whose dates align with the requested timeframe."
+)
+
 
 _BASE_RULES = """\
 - Write in clear, professional prose.
@@ -81,8 +100,11 @@ _FORMAT_SYSTEM: dict[str, str] = {
 }
 
 
-def system_for_format(output_format: str) -> str:
-    return _FORMAT_SYSTEM.get(output_format, _FORMAT_SYSTEM["default"])
+def system_for_format(output_format: str, date_context: str | None = None) -> str:
+    base = _FORMAT_SYSTEM.get(output_format, _FORMAT_SYSTEM["default"])
+    if date_context:
+        return f"{date_context}\n{_DATE_INSTRUCTION}\n\n{base}"
+    return base
 
 
 SYNTHESIS_SYSTEM = _FORMAT_SYSTEM["default"]

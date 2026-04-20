@@ -6,6 +6,9 @@ data/
 .env
 .env.local
 .env.production
+.env.nanobot
+.env.nanobot.bak.*
+.env.nanobot.save
 
 # Python
 __pycache__/

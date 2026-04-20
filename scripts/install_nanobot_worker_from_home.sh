@@ -52,6 +52,10 @@ if [[ ! -f "${REPO}/.env.nanobot" ]]; then
   echo "WARN: ${REPO}/.env.nanobot does not exist — creating from example (EDIT REDIS_URL, M1_BASE_URL, NANOBOT_API_KEY)."
   cp "${REPO}/.env.nanobot.example" "${REPO}/.env.nanobot"
   chown chunkylink:chunkylink "${REPO}/.env.nanobot" 2>/dev/null || true
+else
+  # NEVER overwrite existing .env.nanobot — it holds live tuned values (OLLAMA_NUM_CTX,
+  # NANOBOT_API_KEY, M1_BASE_URL, etc.) and is intentionally preserved across deploys.
+  echo "==> ${REPO}/.env.nanobot already exists — preserving (tuned values survive redeploy)"
 fi
 
 chown -R chunkylink:chunkylink "${REPO}/worker" "${REPO}/docker/docker-compose.nanobot.yml" \

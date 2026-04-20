@@ -17,7 +17,11 @@ class SearchResult:
     snippet: str
 
 
-async def generate_search_queries(prompt: str, llm_fn=None) -> list[str]:
+async def generate_search_queries(
+    prompt: str,
+    llm_fn=None,
+    date_context: str | None = None,
+) -> list[str]:
     """Break a research prompt into 3-5 targeted search queries.
 
     If *llm_fn* is provided it should be an async callable(prompt)->str that
@@ -25,11 +29,20 @@ async def generate_search_queries(prompt: str, llm_fn=None) -> list[str]:
     """
     if llm_fn:
         try:
-            system = (
+            system_parts: list[str] = []
+            if date_context:
+                system_parts.append(date_context)
+                system_parts.append(
+                    "When the topic mentions relative dates (yesterday, last "
+                    "month, this year, recent, etc.), expand them into explicit "
+                    "year/month terms in the queries using the current date above."
+                )
+            system_parts.append(
                 "You are a search-query generator. Given a research topic, "
                 "output 3-5 concise DuckDuckGo search queries (one per line, "
                 "no numbering, no explanation)."
             )
+            system = "\n".join(system_parts)
             raw = await llm_fn(f"{system}\n\nTopic: {prompt}")
             queries = [q.strip().strip('"').strip("'") for q in raw.strip().splitlines() if q.strip()]
             if queries:
@@ -65,9 +78,12 @@ async def run_search(
     prompt: str,
     max_results: int = 10,
     llm_fn=None,
+    date_context: str | None = None,
 ) -> list[SearchResult]:
     """Generate queries and aggregate deduplicated search results."""
-    queries = await generate_search_queries(prompt, llm_fn=llm_fn)
+    queries = await generate_search_queries(
+        prompt, llm_fn=llm_fn, date_context=date_context,
+    )
     seen_urls: set[str] = set()
     all_results: list[SearchResult] = []
 

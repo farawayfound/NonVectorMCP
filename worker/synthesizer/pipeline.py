@@ -9,7 +9,11 @@ import config
 from crawler.search import run_search
 from crawler.scraper import scrape_urls
 from synthesizer.llm_client import generate, quick_generate
-from synthesizer.prompts import build_synthesis_prompt, system_for_format
+from synthesizer.prompts import (
+    build_synthesis_prompt,
+    current_date_context,
+    system_for_format,
+)
 
 log = logging.getLogger(__name__)
 
@@ -50,10 +54,13 @@ async def run_pipeline(
     await _abort_if_cancelled()
     await _status("crawling", "Searching the web...", 0.1)
 
+    date_context = current_date_context()
+
     search_results = await run_search(
         prompt=job.prompt,
         max_results=job.max_sources,
         llm_fn=quick_generate,
+        date_context=date_context,
     )
 
     await _abort_if_cancelled()
@@ -104,7 +111,7 @@ async def run_pipeline(
     num_predict = int(target_tokens * 1.15) + 64
     markdown = await generate(
         user_prompt,
-        system=system_for_format(output_format),
+        system=system_for_format(output_format, date_context=date_context),
         temperature=0.3,
         num_predict=num_predict,
     )
